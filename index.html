@@ -39,6 +39,7 @@
             width: 100%;
             height: 100%;
             background-color: #00ffcc;
+            transition: width 0.05s linear; /* 게이지 감소를 부드럽게 연출 */
         }
         canvas {
             background-color: #111424;
@@ -99,15 +100,15 @@
         const ctx = canvas.getContext('2d');
 
         // [게임 및 캐릭터 상태 변수]
-        // 💡 이동 속도를 26으로 상향하여 입력이 씹히는 답답함을 해결했습니다.
-        let player = { x: 380, y: 190, radius: 14, targetX: 380, speed: 26 };
+        // 💡 캐릭터 전진이 눈에 보이도록 속도를 조정하여 타이머 공백 현상을 해결했습니다.
+        let player = { x: 350 + 30, y: 190, radius: 14, targetX: 350 + 30, speed: 15 };
         let cameraX = player.x - 120;
         let score = 0;
         let isGameOver = false; 
 
         // [시간 관리 시스템 변수]
-        let baseTimeLimit = 500; 
-        let currentTimeLimit = 500; 
+        let baseTimeLimit = 1500; // 초기 제한시간을 조금 더 현실적인 1.5초로 조정 (원하시면 수정 가능)
+        let currentTimeLimit = 1500; 
         let timeElapsed = 0;    
         let lastTime = Date.now(); 
 
@@ -133,6 +134,10 @@
         // 초기 시작 발판 10개 배치
         for(let i = 0; i < 10; i++) { generateBlock(); }
 
+        // 첫 시작 위치 정렬
+        player.x = blocks[0].x + 30;
+        player.targetX = blocks[0].x + 30;
+
         // [키보드 입력 연동]
         window.addEventListener('keydown', (e) => {
             if (isGameOver) return;
@@ -143,7 +148,7 @@
         // [핵심 판정 로직]
         function handleInput(pressedType) {
             if (isGameOver) return;
-            if (player.x !== player.targetX) return; // 전진 중 입력 차단
+            if (player.x !== player.targetX) return; // 이동 중 입력 차단
 
             let targetBlock = blocks[currentBlockIndex];
 
@@ -152,15 +157,16 @@
                 score++;
                 document.getElementById('scoreDisplay').innerText = score;
                 
+                // 난이도 조절 (10점당 0.2초씩 감소, 최소 0.4초 제한)
                 let level = Math.floor(score / 10);
-                currentTimeLimit = Math.max(100, baseTimeLimit - (level * 100));
+                currentTimeLimit = Math.max(400, baseTimeLimit - (level * 200));
                 document.getElementById('timerLabel').innerText = `제한시간 (${(currentTimeLimit/1000).toFixed(2)}초)`;
 
                 currentBlockIndex++;
                 let nextTargetBlock = blocks[currentBlockIndex];
                 player.targetX = nextTargetBlock.x + 30; 
                 
-                timeElapsed = 0; // 타이머 초기화
+                timeElapsed = 0; // 다음 발판을 위한 타이머 초기화
 
                 generateBlock();
             } 
@@ -172,7 +178,7 @@
 
         function triggerGameOver(message) {
             if (isGameOver) return;
-            isGameOver = true; // 호출 즉시 플래그를 세워 중복 진입 방지
+            isGameOver = true; 
             
             document.getElementById('gaugeBar').style.width = '0%';
             
@@ -192,36 +198,37 @@
             currentBlockIndex = 0;
             for(let i = 0; i < 10; i++) { generateBlock(); }
 
-            player = { x: 380, y: 190, radius: 14, targetX: 380, speed: 26 };
+            player = { x: blocks[0].x + 30, y: 190, radius: 14, targetX: blocks[0].x + 30, speed: 15 };
             cameraX = player.x - 120;
 
             document.getElementById('scoreDisplay').innerText = score;
             document.getElementById('timerLabel').innerText = `제한시간 (${(baseTimeLimit/1000).toFixed(2)}초)`;
             document.getElementById('gaugeBar').style.width = '100%';
             
-            isGameOver = false; // 모든 데이터 세팅이 끝난 후 플래그 해제
+            isGameOver = false; 
             lastTime = Date.now();
-            animate(); // 안전하게 단 하나의 루프만 재시작
+            animate(); 
         }
 
         // [메인 게임 루프]
         function animate() {
-            // 💡 애니메이션 루프가 중첩 누적되는 현상을 원천 차단합니다.
             if (isGameOver) return; 
 
             let now = Date.now();
             let dt = now - lastTime;
             lastTime = now;
 
-            // 캐릭터 이동
+            // 캐릭터 이동 로직
             if (player.x < player.targetX) {
                 player.x += player.speed;
-                if (player.x > player.targetX) player.x = player.targetX;
+                if (player.x > player.targetX) {
+                    player.x = player.targetX;
+                }
             }
 
             cameraX = player.x - 120;
 
-            // 시간 계산 및 게이지 연동
+            // 💡 [핵심 수정] 캐릭터가 멈춰서 다음 입력을 기다릴 때만 실시간으로 시간이 흐르고 게이지가 줄어듭니다.
             let isWaitingInput = (player.x === player.targetX);
 
             if (isWaitingInput) {
@@ -230,12 +237,13 @@
                 let gaugePercent = Math.max(0, 100 - (timeElapsed / currentTimeLimit) * 100);
                 document.getElementById('gaugeBar').style.width = gaugePercent + '%';
 
-                // 타임아웃 조건 검사
+                // 타임아웃 검사
                 if (timeElapsed >= currentTimeLimit) {
                     triggerGameOver("시간 안에 이온 통로를 개방하지 못했습니다!");
-                    return; // 즉시 루프 탈출
+                    return; 
                 }
             } else {
+                // 전진하는 짧은 도중에는 게이지를 가득 채워 대기시킵니다.
                 document.getElementById('gaugeBar').style.width = '100%';
             }
 
@@ -272,7 +280,7 @@
 
                 ctx.fillStyle = '#000000';
                 ctx.font = 'bold 12px sans-serif';
-                ctx.fillText(b.type === 'Na' ? 'Na+ (1)' : 'K+ (2)', b.x + 8, 205);
+                ctx.fillText(b.type === 'Na' ? 'Na+' : 'K+', b.x + 15, 205);
 
                 if (idx === currentBlockIndex) {
                     ctx.fillStyle = '#ffffff';
@@ -294,7 +302,8 @@
             requestAnimationFrame(animate);
         }
 
-        // 게임 최초 실행 명령
+        // 게임 최초 실행
+        document.getElementById('timerLabel').innerText = `제한시간 (${(baseTimeLimit/1000).toFixed(2)}초)`;
         lastTime = Date.now();
         animate();
     </script>
