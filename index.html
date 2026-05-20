@@ -88,27 +88,6 @@
             border-radius: 3px;
             font-weight: bold;
         }
-        
-        /* [신규] 게임 시작 대기 화면 오버레이 */
-        #start-screen {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background-color: rgba(0,0,0,0.9);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 30;
-        }
-        #input-display {
-            font-size: 24px;
-            color: #ff9f43;
-            margin-top: 15px;
-            letter-spacing: 2px;
-            font-weight: bold;
-            min-height: 35px;
-        }
-
         /* 게임오버 화면 팝업 */
         #game-over-screen {
             display: none;
@@ -143,13 +122,6 @@
 
     <!-- 게임 화면 박스 -->
     <div id="game-container">
-        <!-- [신규] 시작 대기 화면 -->
-        <div id="start-screen">
-            <h1 style="color: #ff9f43; font-size: 36px; margin-bottom: 5px;">뉴런의 신경전달 대탐험</h1>
-            <p style="color: #ccc; font-size: 18px; margin: 5px 0;">게임을 시작하려면 키보드로 <span style="color: #fff; font-weight: bold; background: #444; padding: 2px 6px; border-radius: 4px;">start</span> 를 입력하세요!</p>
-            <div id="input-display">입력 대기 중...</div>
-        </div>
-
         <div id="character"></div>
         <div id="platforms-wrapper"></div>
 
@@ -176,8 +148,6 @@
         const scoreElem = document.getElementById('score');
         const gameOverScreen = document.getElementById('game-over-screen');
         const deathReasonElem = document.getElementById('death-reason');
-        const startScreen = document.getElementById('start-screen');
-        const inputDisplay = document.getElementById('input-display');
 
         let score = 0;
         let currentIndex = 0; // 현재 밟고 있는 발판 번호
@@ -185,10 +155,7 @@
         let timerInterval = null;
         let timeLeft = 100;   // 남은 시간 백분율 (%)
         const LIMIT_TIME = 1.5; // 제한 시간 1.5초
-        
-        let isStarted = false;  // [신규] 게임 시작 여부 플래그
-        let gameActive = false; // [신규] 실제 게임 플레이 가능 여부
-        let inputBuffer = "";   // [신규] 유저가 입력한 글자 저장소
+        let isGameOver = false;
 
         // 1. 발판 무작위 패턴 생성 기능
         function generatePlatforms() {
@@ -225,7 +192,7 @@
             let currentStep = 0;
 
             timerInterval = setInterval(() => {
-                if (!gameActive) return;
+                if (isGameOver) return;
                 
                 currentStep++;
                 timeLeft = 100 - (currentStep / totalSteps * 100);
@@ -238,32 +205,10 @@
             }, step);
         }
 
-        // [신규] 전체 키보드 이벤트 리스너 통합 관리
+        // 3. 2가지 키 조건문 판정 시스템 & 캐릭터 자동 전진
         window.addEventListener('keydown', (e) => {
-            // A. 아직 게임이 시작되지 않은 경우 (start 입력 감지 단계)
-            if (!isStarted) {
-                const key = e.key.toLowerCase();
-                
-                // 알파벳 글자수 1자인 경우만 버퍼에 추가 (Ctrl, Shift 등 제외)
-                if (key.length === 1 && key.match(/[a-z]/)) {
-                    inputBuffer += key;
-                    inputDisplay.innerText = `입력 중: ${inputBuffer}`;
-                    
-                    // 'start' 단어가 완성되었는지 확인
-                    if (inputBuffer.includes("start")) {
-                        isStarted = true;
-                        gameActive = true;
-                        startScreen.style.display = 'none'; // 시작 화면 제거
-                        startTimer(); // 타이머 가동
-                    }
-                }
-                return;
-            }
+            if (isGameOver) return;
 
-            // B. 플레이 중 게임오버 상태라면 키 입력 차단
-            if (!gameActive) return;
-
-            // C. 실제 게임 플레이 로직 (N, K 키 제어)
             const nextIndex = currentIndex + 1;
             const nextPlatformType = platforms[nextIndex]; // 다음 발판의 색상 확인
             const key = e.key.toLowerCase();
@@ -287,7 +232,7 @@
                 charElem.style.bottom = '100px'; 
                 setTimeout(() => { charElem.style.bottom = '60px'; }, 100);
 
-                // 카메라 추적 효과
+                // 카메라 추적 효과 (발판 전체 랩퍼를 왼쪽으로 밀어줌으로써 카메라가 따라가는 UX 체감 형성)
                 wrapperElem.style.left = `${-currentIndex * 150}px`;
                 
                 // 다음 칸을 위한 타이머 일시정지 및 리셋 재작동
@@ -302,30 +247,30 @@
 
         // 4. 캐릭터 사망 및 게임오버 시스템
         function triggerGameOver(reason) {
-            gameActive = false;
+            isGameOver = true;
             clearInterval(timerInterval);
             deathReasonElem.innerText = reason;
             gameOverScreen.style.display = 'flex';
             charElem.style.backgroundColor = '#4c4c4c'; // 캐릭터가 잿빛으로 변하는 연출 (사망 UX)
         }
 
-        // 5. 라운드 재시작 기능 (다시 시작할 때는 start 입력 없이 바로 진행)
+        // 5. 라운드 재시작 기능
         function resetGame() {
             score = 0;
             currentIndex = 0;
-            gameActive = true;
+            isGameOver = false;
             scoreElem.innerText = score;
             charElem.style.backgroundColor = '#ff9f43';
             wrapperElem.style.left = '0px';
-            gameOverScreen.style.none;
             gameOverScreen.style.display = 'none';
             
             generatePlatforms();
             startTimer();
         }
 
-        // 최초 1회 발판 맵 미리 생성
+        // 게임 최초 기동 실행
         generatePlatforms();
+        startTimer();
     </script>
 </body>
 </html>
