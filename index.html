@@ -2,175 +2,282 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>뉴런 러너 - 코어 단계</title>
+    <title>생명과학 게임 - 흥분 전도 단계</title>
     <style>
         body {
             margin: 0;
-            background-color: #1a1a1a;
-            color: white;
-            font-family: 'Malgun Gothic', sans-serif;
+            background-color: #0b0f19;
             display: flex;
             flex-direction: column;
-            align-items: center;
             justify-content: center;
+            align-items: center;
             height: 100vh;
-            overflow: hidden;
+            font-family: 'Malgun Gothic', sans-serif;
+            user-select: none;
         }
-        #game-container {
-            position: relative;
+        /* 상단 UI 레이아웃 */
+        #uiContainer {
             width: 800px;
-            height: 400px;
-            background-color: #2b2b2b;
-            border: 4px solid #444;
-            border-radius: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        /* 제한시간 게이지 바 */
+        #gaugeContainer {
+            width: 250px;
+            height: 16px;
+            background-color: #222;
+            border: 2px solid #fff;
+            border-radius: 8px;
             overflow: hidden;
         }
-        /* 주인공 캐릭터 */
-        #character {
-            position: absolute;
-            width: 40px;
-            height: 40px;
-            background-color: #ff9f43;
-            border-radius: 50%;
-            bottom: 60px;
-            left: 100px;
-            transition: left 0.2s ease, bottom 0.1s ease;
-            z-index: 10;
+        #gaugeBar {
+            width: 100%;
+            height: 100%;
+            background-color: #00ffcc;
+            transition: width 0.05s linear;
         }
-        /* 발판들이 배치될 가로 줄 전체 박스 */
-        #platforms-wrapper {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            display: flex;
-            transition: left 0.2s ease;
+        canvas {
+            background-color: #111424;
+            border: 3px solid #3f48cc;
+            box-shadow: 0 0 20px rgba(63, 72, 204, 0.5);
+            border-radius: 8px;
         }
-        .platform {
-            width: 120px;
-            height: 50px;
-            margin-right: 30px;
-            border-radius: 5px;
+        /* 하단 버튼 UI 스타일 */
+        #buttonContainer {
+            width: 800px;
             display: flex;
-            align-items: center;
             justify-content: center;
-            font-weight: bold;
-            font-size: 14px;
-            color: #2b2b2b;
-        }
-        /* 요구사항 반영 이온 색상 */
-        .sodium { background-color: #f1c40f; }    /* 노랑: 나트륨 */
-        .potassium { background-color: #2ecc71; } /* 초록: 칼륨 */
-        
-        #ui-layer {
+            gap: 40px;
             margin-top: 20px;
-            text-align: center;
         }
-        .key-guide {
-            display: inline-block;
-            padding: 8px 15px;
-            margin: 5px;
-            border-radius: 5px;
+        .game-btn {
+            width: 180px;
+            padding: 12px;
+            font-size: 18px;
             font-weight: bold;
-            font-size: 16px;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            color: black;
+            box-shadow: 0 5px #666;
+            transition: all 0.1s;
         }
+        .game-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 1px #666;
+        }
+        #naBtn { background-color: #39ff14; } /* 나트륨 연두색 */
+        #kBtn { background-color: #ffea00; }  /* 칼륨 노란색 */
     </style>
 </head>
 <body>
 
-    <h1>점수: <span id="score">0</span></h1>
-
-    <div id="game-container">
-        <div id="character"></div>
-        <div id="platforms-wrapper"></div>
+    <div id="uiContainer">
+        <div>현재 점수: <span id="scoreDisplay">0</span> 점</div>
+        <div style="font-size: 14px; color: #aaa;">[1번] 이나 [2번] 키를 누르거나 하단 버튼을 클릭하세요!</div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <span>제한시간</span>
+            <div id="gaugeContainer">
+                <div id="gaugeBar"></div>
+            </div>
+        </div>
     </div>
 
-    <!-- 새롭게 매칭된 조작 가이드 UI -->
-    <div id="ui-layer">
-        <h3>[현재 단계] 올바른 이온 키를 눌러 전진하세요!</h3>
-        <span class="key-guide potassium" style="color: white;">초록색 발판 떴을 때 ➔ [1] 키</span>
-        <span class="key-guide sodium">노란색 발판 떴을 때 ➔ [2] 키</span>
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
+
+    <div id="buttonContainer">
+        <button id="naBtn" class="game-btn" onclick="handleInput('Na')">나트륨 (1번)</button>
+        <button id="kBtn" class="game-btn" onclick="handleInput('K')">칼륨 (2번)</button>
     </div>
 
     <script>
-        const charElem = document.getElementById('character');
-        const wrapperElem = document.getElementById('platforms-wrapper');
-        const scoreElem = document.getElementById('score');
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
 
+        // [게임 및 캐릭터 상태 변수]
+        let player = { x: 100, y: 190, radius: 14, targetX: 100, speed: 6 };
+        let cameraX = 0;
         let score = 0;
-        let currentIndex = 0; // 캐릭터가 디딛고 있는 현재 발판 위치
-        let platforms = [];   // 무작위로 생성될 발판들의 색상 저장소
+        let gauge = 100;
+        let drainSpeed = 0.35; // 기본 게이지 감소 속도
 
-        // 1단계: 100개의 발판 무작위 패턴 생성 및 배치
-        function initGame() {
-            score = 0;
-            currentIndex = 0;
-            scoreElem.innerText = score;
-            wrapperElem.innerHTML = '';
-            platforms = [];
+        // [무한 맵 발판 데이터 생성]
+        let blocks = [];
+        let nextBlockX = 350;
+        let currentBlockIndex = 0;
 
-            // 캐릭터 시작 지점 (첫 발판은 무조건 노란색 고정)
-            platforms.push('sodium');
-
-            // 1번부터 99번 발판까지 노랑(sodium) 또는 초록(potassium) 무작위 결정
-            for(let i = 1; i < 100; i++) {
-                const type = Math.random() > 0.5 ? 'sodium' : 'potassium';
-                platforms.push(type);
-            }
-
-            // 루프를 돌며 HTML 화면에 발판 실물 그리기
-            platforms.forEach((type, index) => {
-                const plat = document.createElement('div');
-                plat.className = `platform ${type}`;
-                plat.innerText = type === 'sodium' ? '나트륨(2)' : '칼륨(1)';
-                plat.style.position = 'absolute';
-                // 발판 너비(120px) + 간격(30px) = 150px씩 우측으로 배치
-                plat.style.left = `${index * 150}px`; 
-                wrapperElem.appendChild(plat);
+        function generateBlock() {
+            let types = ['Na', 'K'];
+            let randomType = types[Math.floor(Math.random() * types.length)];
+            let color = (randomType === 'Na') ? '#39ff14' : '#ffea00'; // Na=연두, K=노랑
+            
+            blocks.push({
+                x: nextBlockX,
+                type: randomType,
+                color: color,
+                isMyelin: Math.random() > 0.4 // 말이집(마디)인지 랑비에결절(통로)인지 랜덤 묘사용
             });
-
-            // 초기 위치 세팅
-            wrapperElem.style.left = '0px';
+            nextBlockX += 260; // 발판 간 간격
         }
 
-        // 2단계: 키보드 입력 및 조건문 판정 시스템
+        // 초기 시작 발판 10개 선행 배치
+        for(let i = 0; i < 10; i++) { generateBlock(); }
+
+        // [키보드 입력 연동]
         window.addEventListener('keydown', (e) => {
-            // 다음에 밟아야 할 발판의 인덱스와 타깃 색상 확인
-            const nextIndex = currentIndex + 1;
-            
-            // 100개 발판을 다 깨면 안전하게 종료
-            if (nextIndex >= platforms.length) return; 
-            
-            const nextPlatformType = platforms[nextIndex];
-            const pressedKey = e.key; // 유저가 누른 키 값 받기
-
-            let isCorrect = false;
-
-            // 핵심 조건문 분기 설계
-            if (nextPlatformType === 'potassium' && pressedKey === '1') {
-                isCorrect = true; // 초록 발판일 때 1번 통과
-            } else if (nextPlatformType === 'sodium' && pressedKey === '2') {
-                isCorrect = true; // 노란 발판일 때 2번 통과
-            }
-
-            // 조건 통과 시 캐릭터 자동 점프 및 카메라 이동 연동
-            if (isCorrect) {
-                currentIndex = nextIndex;
-                score++;
-                scoreElem.innerText = score;
-
-                // 통통 튀는 점프 애니메이션 (Y축 좌표 제어)
-                charElem.style.bottom = '110px';
-                setTimeout(() => {
-                    charElem.style.bottom = '60px';
-                }, 100);
-
-                // 카메라 추적: 발판 묶음을 한 칸 분량(-150px)만큼 왼쪽으로 당김
-                wrapperElem.style.left = `${-currentIndex * 150}px`;
-            }
+            if (e.key === '1') handleInput('Na');
+            if (e.key === '2') handleInput('K');
         });
 
-        // 웹페이지가 로드되면 즉시 실행
-        initGame();
+        // [핵심 판정 로직: 키보드/마우스 입력 공통 처리]
+        function handleInput(pressedType) {
+            // 캐릭터가 이동 중일 때는 연속 입력 방지
+            if (player.x !== player.targetX) return;
+
+            let targetBlock = blocks[currentBlockIndex];
+
+            // 1. 알맞은 신호(색상) 버튼을 정상적으로 누른 경우 (성공)
+            if (pressedType === targetBlock.type) {
+                score++;
+                document.getElementById('scoreDisplay').innerText = score;
+                
+                // 난이도 상승 규칙 (점수별 게이지 감소 속도 업)
+                if (score >= 20) drainSpeed = 0.7;
+                else if (score >= 10) drainSpeed = 0.5;
+
+                // 다음 발판(결절)으로 횡스크롤 카메라 추적 연동 전진
+                player.targetX = targetBlock.x + 30;
+                currentBlockIndex++;
+                gauge = 100; // 성공 시 제한시간 초기화
+
+                // 무한 맵 유지를 위해 새 발판 뒤에 추가
+                generateBlock();
+            } 
+            // 2. 잘못된 버튼을 누른 경우 (게임 오버)
+            else {
+                triggerGameOver("잘못된 이온 버튼을 눌렀습니다!");
+            }
+        }
+
+        // [게임 오버 처리 함수]
+        function triggerGameOver(message) {
+            alert("게임 오버! \n이유: " + message + "\n최종 점수: " + score + "점");
+            resetGame();
+        }
+
+        // [게임 리셋 함수]
+        function resetGame() {
+            player = { x: 100, y: 190, radius: 14, targetX: 100, speed: 6 };
+            cameraX = 0;
+            score = 0;
+            gauge = 100;
+            drainSpeed = 0.35;
+            document.getElementById('scoreDisplay').innerText = score;
+            document.getElementById('gaugeBar').style.width = '100%';
+            
+            blocks = [];
+            nextBlockX = 350;
+            currentBlockIndex = 0;
+            for(let i = 0; i < 10; i++) { generateBlock(); }
+        }
+
+        // [메인 그래픽 및 연출 루프]
+        function animate() {
+            // 캐릭터 이동 연출 (자동 전진 메커니즘)
+            if (player.x < player.targetX) {
+                player.x += player.speed;
+                if (player.x > player.targetX) player.x = player.targetX;
+            }
+
+            // 카메라 위치 실시간 추적 (캐릭터가 항상 화면 왼쪽에 위치하도록 횡스크롤)
+            cameraX = player.x - 120;
+
+            // [제한시간 체크 및 게이지 감소]
+            let activeBlock = blocks[currentBlockIndex];
+            // 유저가 신호 구간(발판 전방 180px)에 진입하면 게이지가 줄어들기 시작
+            if (player.x >= activeBlock.x - 180) {
+                gauge -= drainSpeed;
+                if (gauge < 0) gauge = 0;
+                document.getElementById('gaugeBar').style.width = gauge + '%';
+            }
+
+            // 게이지가 0이 되면 시간 초과로 게임오버 처리
+            if (gauge <= 0) {
+                triggerGameOver("시간 안에 이온 통로를 개방하지 못했습니다!");
+                requestAnimationFrame(animate);
+                return;
+            }
+
+            // 화면 그리기 초기화
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            ctx.translate(-cameraX, 0);
+
+            // 1. [배경 연출] 뉴런 세포막 뼈대 (가로 선)
+            ctx.strokeStyle = '#2d325a';
+            ctx.lineWidth = 6;
+            ctx.beginPath();
+            ctx.moveTo(0, 200);
+            ctx.lineTo(player.x + 1000, 200);
+            ctx.stroke();
+
+            // 2. [맵 구조 연출] 말이집(Myelin)과 랑비에 결절 표현 및 빛나는 발판 신호
+            blocks.forEach((b, idx) => {
+                // 말이집 묘사 (소시지 모양의 회색 덩어리)
+                if (b.isMyelin && idx !== currentBlockIndex) {
+                    ctx.fillStyle = '#3a3f58';
+                    ctx.fillRect(b.x - 120, 185, 100, 30);
+                }
+
+                // 랑비에 결절 / 신호 발판 그리기
+                ctx.fillStyle = b.color;
+                // 현재 맞춰야 하는 타겟 발판은 은은하게 빛나는 효과(Glow) 추가
+                if (idx === currentBlockIndex) {
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = b.color;
+                } else {
+                    ctx.shadowBlur = 0;
+                }
+                
+                // 발판 구조물 렌더링
+                ctx.fillRect(b.x, 190, 60, 20);
+                ctx.shadowBlur = 0; // 다른 그림에 영향 안 주게 초기화
+
+                // 이온 기호 및 번호 힌트 텍스트 렌더링
+                ctx.fillStyle = '#000000';
+                ctx.font = 'bold 12px sans-serif';
+                ctx.fillText(b.type === 'Na' ? 'Na+ (1)' : 'K+ (2)', b.x + 8, 205);
+
+                // 현재 타겟 발판 가이드 표시 (▼)
+                if (idx === currentBlockIndex) {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = 'bold 18px sans-serif';
+                    ctx.fillText('▼', b.x + 20, 175);
+                }
+            });
+
+            // 3. [유저 캐릭터] 뉴런 위를 달리는 액션 캐릭터 (시각성 좋은 시안블루 원)
+            ctx.fillStyle = '#00e5ff';
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#00e5ff';
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0; // 초기화
+
+            ctx.restore();
+
+            requestAnimationFrame(animate);
+        }
+
+        // 최초 실행
+        animate();
     </script>
 </body>
 </html>
