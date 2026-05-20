@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>생명과학 게임 - 통합 단계</title>
+    <title>생명과학 게임 - 통합 안정화 단계</title>
     <style>
         body {
             margin: 0;
@@ -115,6 +115,9 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
 
+        // 메인 게임 프레임 인터벌 제어용 변수 (중복 생성 방지용)
+        let gameInterval = null;
+
         // 전역 메인 게임 상태
         let currentPhase = 'SCENE1';
         let isGameOver = false;
@@ -130,9 +133,11 @@
         let blocks = [];
         let nextBlockX = 350;
         let currentBlockIndex = 0;
-        const TARGET_SCORE_TO_SYNAPSE = 15; 
+        
+        let targetScoreForThisRound = 15; 
+        let stageCycleCount = 0; 
 
-        // 이온 애니메이션 전용 변수 (장면 1에서만 활성화)
+        // 이온 애니메이션 전용 변수
         let ambientParticles = [];
         let transportParticles = [];
 
@@ -176,7 +181,6 @@
             nextBlockX += 260;
         }
 
-        // 세포막 안팎의 이온 분포 배경 생성 (장면 1 전용)
         function initAmbientParticles() {
             ambientParticles = [];
             for (let i = 0; i < 80; i++) {
@@ -189,9 +193,7 @@
             }
         }
 
-        // 입력 타이밍 성공 시 실시간 이온 흡입/분출 연출 제어
         function triggerIonTransportAnimation(gateX, ionType) {
-            // 오직 장면 1에서 달릴 때만 입자를 생성하도록 검증
             if (currentPhase !== 'SCENE1') return;
 
             const burstCount = 25; 
@@ -222,12 +224,12 @@
             }
         }
 
-        // 흥분 전도 입력 처리
         function handleScene1Input(pressedType) {
             if (isGameOver || currentPhase !== 'SCENE1') return;
             if (player.x !== player.targetX) return; 
 
             let targetBlock = blocks[currentBlockIndex];
+            if (!targetBlock) return; // 언더플로우/오버플로우 예외 방어
 
             if (pressedType === targetBlock.type) {
                 triggerIonTransportAnimation(targetBlock.x + 30, pressedType);
@@ -235,324 +237,14 @@
                 score++;
                 document.getElementById('scoreDisplay').innerText = score;
 
-                if (score >= TARGET_SCORE_TO_SYNAPSE) {
+                if (score >= targetScoreForThisRound) {
                     currentPhase = 'SCENE2_ARRIVE';
                     player.targetX = player.x + 200; 
                     timeElapsed = 0;
-                    
-                    // 💡 장면 2 준비 단계 진입 시 이온 애니메이션 배열 즉시 초기화하여 잔상 제거
                     transportParticles = [];
                     ambientParticles = [];
                     return;
                 }
 
-                let level = Math.floor(score / 5);
-                currentTimeLimit = Math.max(500, baseTimeLimit - (level * 200));
-                document.getElementById('timerLabel').innerText = `제한시간 (${(currentTimeLimit/1000).toFixed(2)}초)`;
-
-                currentBlockIndex++;
-                let nextTargetBlock = blocks[currentBlockIndex];
-                player.targetX = nextTargetBlock.x + 30; 
-                timeElapsed = 0; 
-                generateBlock();
-            } else {
-                triggerGameOver("잘못된 이온 버튼을 눌렀습니다!");
-            }
-        }
-
-        // 시냅스 단계 돌입 및 패턴 생성
-        function startSynapsePhase() {
-            currentPhase = 'SCENE2_PATTERN';
-            document.getElementById('stageInfo').innerText = '(시냅스 전달)';
-            document.getElementById('stageInfo').style.color = '#ff3333';
-            document.getElementById('guideText').innerText = '신경전달물질의 방출 패턴을 외우세요!';
-            
-            patternSequence = [];
-            for (let i = 0; i < 3; i++) {
-                patternSequence.push(TYPES[Math.floor(Math.random() * TYPES.length)]);
-            }
-            
-            patternTimer = 0;
-            currentFlashIndex = 0; 
-            timeElapsed = 0;
-
-            // 안심 장치: 이온 관련 배열을 한 번 더 비움
-            transportParticles = [];
-            ambientParticles = [];
-        }
-
-        // 시냅스 입력 처리
-        function pressScene2Button(type) {
-            if (currentPhase !== 'SCENE2_INPUT' || isGameOver) return;
-
-            if (patternSequence[playerInputIndex] === type) {
-                playerInputIndex++;
-                score += 2; 
-                document.getElementById('scoreDisplay').innerText = score;
-
-                if (playerInputIndex >= patternSequence.length) {
-                    currentPhase = 'SUCCESS';
-                    isPostNeuronGlowing = true;
-                    successTimer = 0;
-                    document.getElementById('gaugeBar').style.width = '100%';
-                    document.getElementById('guideText').innerText = '💡 흥분 전달 성공! 다음 뉴런으로 자극이 이동합니다!';
-                }
-            } else {
-                triggerGameOver("신경전달물질 매칭에 실패하여 자극이 차단되었습니다!");
-            }
-        }
-
-        function toggleButtons(phase) {
-            const sc1 = (phase === 'SCENE1');
-            const sc2 = (phase === 'SCENE2_INPUT');
-            
-            document.getElementById('naBtn').disabled = !sc1;
-            document.getElementById('kBtn').disabled = !sc1;
-            document.getElementById('achBtn').disabled = !sc2;
-            document.getElementById('daBtn').disabled = !sc2;
-            document.getElementById('gabaBtn').disabled = !sc2;
-        }
-
-        function triggerGameOver(message) {
-            if (isGameOver) return;
-            isGameOver = true;
-            document.getElementById('gaugeBar').style.width = '0%';
-            setTimeout(() => {
-                alert("게임 오버! \n이유: " + message + "\n최종 점수: " + score + "점");
-                resetGame();
-            }, 10);
-        }
-
-        function resetGame() {
-            currentPhase = 'SCENE1';
-            isGameOver = false;
-            score = 0;
-            timeElapsed = 0;
-            currentTimeLimit = baseTimeLimit;
-            currentBlockIndex = 0;
-            nextBlockX = 350;
-            
-            transportParticles = []; 
-            initAmbientParticles(); // 장면 1 시작 시에만 다시 생성
-
-            blocks = [];
-            for(let i = 0; i < 20; i++) { generateBlock(); }
-
-            player = { x: blocks[0].x + 30, y: 190, radius: 14, targetX: blocks[0].x + 30, speed: 15 };
-            cameraX = player.x - 120;
-
-            document.getElementById('scoreDisplay').innerText = score;
-            document.getElementById('stageInfo').innerText = '(흥분 전도)';
-            document.getElementById('stageInfo').style.color = '#00ffcc';
-            document.getElementById('guideText').innerText = '[1번] 나트륨 개방 / [2번] 칼륨 개방';
-            document.getElementById('timerLabel').innerText = `제한시간 (${(baseTimeLimit/1000).toFixed(2)}초)`;
-            document.getElementById('gaugeBar').style.width = '100%';
-            document.getElementById('gaugeBar').style.backgroundColor = '#00ffcc';
-
-            toggleButtons('SCENE1');
-            lastTime = Date.now();
-        }
-
-        // 메인 프레임 제어 루프
-        function animate() {
-            if (isGameOver) return;
-
-            let now = Date.now();
-            let dt = now - lastTime;
-            lastTime = now;
-
-            toggleButtons(currentPhase);
-
-            // --- 페이즈별 업데이터 로직 ---
-            if (currentPhase === 'SCENE1') {
-                if (player.x < player.targetX) {
-                    player.x += player.speed;
-                    if (player.x > player.targetX) player.x = player.targetX;
-                }
-                cameraX = player.x - 120;
-
-                if (player.x === player.targetX) {
-                    timeElapsed += dt;
-                    let pct = Math.max(0, 100 - (timeElapsed / currentTimeLimit) * 100);
-                    document.getElementById('gaugeBar').style.width = pct + '%';
-                    if (timeElapsed >= currentTimeLimit) {
-                        triggerGameOver("시간 안에 이온 통로를 개방하지 못했습니다!");
-                        return;
-                    }
-                } else {
-                    document.getElementById('gaugeBar').style.width = '100%';
-                }
-
-                // 💡 이온 수송 물리 업데이트 (오직 SCENE1 일때만 계산)
-                transportParticles.forEach((p) => {
-                    p.x += p.speedX;
-                    p.y += p.speedY;
-                });
-                transportParticles = transportParticles.filter(p => {
-                    if (p.type === 'Na' && p.y >= p.targetY) return false;
-                    if (p.type === 'K' && p.y <= p.targetY) return false;
-                    return true;
-                });
-            } 
-            else if (currentPhase === 'SCENE2_ARRIVE') {
-                if (player.x < player.targetX) {
-                    player.x += 8;
-                    cameraX += 6;
-                } else {
-                    startSynapsePhase();
-                }
-                document.getElementById('gaugeBar').style.width = '100%';
-            } 
-            else if (currentPhase === 'SCENE2_PATTERN') {
-                document.getElementById('gaugeBar').style.backgroundColor = '#ff3333';
-                patternTimer += dt;
-                
-                if (patternTimer > 800) {
-                    patternTimer = 0;
-                    currentFlashIndex++;
-                    if (currentFlashIndex >= patternSequence.length) {
-                        currentPhase = 'SCENE2_INPUT';
-                        currentFlashIndex = -1;
-                        timeElapsed = 0;
-                        playerInputIndex = 0;
-                        document.getElementById('guideText').innerText = '암기한 비밀번호(1, 2, 3번 키)를 순서대로 입력하세요!';
-                    }
-                }
-                document.getElementById('gaugeBar').style.width = '100%';
-            } 
-            else if (currentPhase === 'SCENE2_INPUT') {
-                timeElapsed += dt;
-                let pct = Math.max(0, 100 - (timeElapsed / scene2TimeLimit) * 100);
-                document.getElementById('gaugeBar').style.width = pct + '%';
-                document.getElementById('timerLabel').innerText = `제한시간 (${((scene2TimeLimit - timeElapsed)/1000).toFixed(2)}초)`;
-
-                if (timeElapsed >= scene2TimeLimit) {
-                    triggerGameOver("신경전달물질 분비 시간이 초과되었습니다!");
-                    return;
-                }
-            } 
-            else if (currentPhase === 'SUCCESS') {
-                successTimer += dt;
-                if (successTimer > 2000) {
-                    currentPhase = 'SCENE1';
-                    isPostNeuronGlowing = false;
-                    baseTimeLimit = Math.max(400, baseTimeLimit - 150); 
-                    score += 10; 
-                    resetGame();
-                    return;
-                }
-            }
-
-            // --- 그래픽 렌더링 시스템 (HTML5 Canvas) ---
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            if (currentPhase === 'SCENE1' || currentPhase === 'SCENE2_ARRIVE') {
-                // 1단계: 전기적 전도 화면 구성
-                ctx.save();
-                ctx.translate(-cameraX, 0);
-
-                // 세포막 기본 축삭선
-                ctx.strokeStyle = '#2d325a';
-                ctx.lineWidth = 6;
-                ctx.beginPath(); ctx.moveTo(0, 200); ctx.lineTo(player.x + 1200, 200); ctx.stroke();
-
-                // 💡 배경 잔여 이온 렌더링
-                ambientParticles.forEach(ap => {
-                    ctx.fillStyle = ap.type === 'Na' ? 'rgba(57, 255, 20, 0.12)' : 'rgba(255, 234, 0, 0.12)';
-                    ctx.beginPath();
-                    ctx.arc(ap.x, ap.y, ap.radius, 0, Math.PI * 2);
-                    ctx.fill();
-                });
-
-                blocks.forEach((b, idx) => {
-                    if (b.isMyelin && idx !== currentBlockIndex) {
-                        ctx.fillStyle = '#3a3f58';
-                        ctx.fillRect(b.x - 120, 185, 100, 30);
-                    }
-                    ctx.fillStyle = b.color;
-                    if (idx === currentBlockIndex) { ctx.shadowBlur = 15; ctx.shadowColor = b.color; }
-                    ctx.fillRect(b.x, 190, 60, 20);
-                    ctx.shadowBlur = 0;
-
-                    ctx.strokeStyle = '#ffffff';
-                    ctx.lineWidth = 1.5;
-                    ctx.strokeRect(b.x, 190, 60, 20);
-
-                    ctx.fillStyle = '#000000';
-                    ctx.font = 'bold 11px sans-serif';
-                    ctx.fillText(b.type === 'Na' ? 'Na+ 통로' : 'K+ 통로', b.x + 8, 204);
-
-                    if (idx === currentBlockIndex) {
-                        ctx.fillStyle = '#ffffff'; ctx.font = 'bold 18px sans-serif';
-                        ctx.fillText('▼', b.x + 20, 175);
-                    }
-                });
-
-                // 💡 실시간 유입/유출 흡입 반응 이온 입자 드로잉
-                transportParticles.forEach(p => {
-                    ctx.fillStyle = p.color;
-                    ctx.shadowBlur = 8;
-                    ctx.shadowColor = p.color;
-                    ctx.beginPath();
-                    ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.shadowBlur = 0;
-                });
-
-                // 캐릭터
-                ctx.fillStyle = '#00e5ff'; ctx.shadowBlur = 10; ctx.shadowColor = '#00e5ff';
-                ctx.beginPath(); ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2); ctx.fill();
-                ctx.restore();
-            } 
-            else {
-                // 2단계: 시냅스 화학적 전달 화면 구성 (이온 드로잉 코드가 완벽히 생략됨)
-                ctx.fillStyle = '#222845';
-                ctx.beginPath(); ctx.arc(150, 200, 120, -Math.PI/2, Math.PI/2); ctx.fill();
-                ctx.fillRect(0, 80, 150, 240);
-
-                ctx.fillStyle = isPostNeuronGlowing ? '#00ffcc' : '#1b2234';
-                if (isPostNeuronGlowing) { ctx.shadowBlur = 25; ctx.shadowColor = '#00ffcc'; }
-                ctx.beginPath(); ctx.arc(650, 200, 120, Math.PI/2, -Math.PI/2); ctx.fill();
-                ctx.fillRect(650, 80, 150, 240);
-                ctx.shadowBlur = 0;
-
-                ctx.strokeStyle = '#3f48cc'; ctx.lineWidth = 2;
-                ctx.beginPath(); ctx.moveTo(275, 50); ctx.lineTo(275, 350); ctx.stroke();
-                ctx.beginPath(); ctx.moveTo(525, 50); ctx.lineTo(525, 350); ctx.stroke();
-
-                patternSequence.forEach((type, idx) => {
-                    let info = TYPE_INFO[type];
-                    ctx.fillStyle = (idx === currentFlashIndex || currentPhase === 'SCENE2_INPUT') ? info.color : '#444';
-                    
-                    if (currentPhase === 'SCENE2_INPUT' && idx < playerInputIndex) {
-                        ctx.fillStyle = '#111424'; 
-                    }
-
-                    ctx.fillRect(300 + (idx * 70), 30, 50, 40);
-                    ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif';
-                    ctx.fillText(info.name[0]+info.name[1], 305 + (idx * 70), 55);
-                });
-
-                patternSequence.forEach((type, idx) => {
-                    let info = TYPE_INFO[type];
-                    if (currentPhase === 'SCENE2_INPUT' && idx < playerInputIndex) {
-                        ctx.fillStyle = info.color;
-                        ctx.beginPath(); ctx.arc(500, 120 + (idx * 70), 12, 0, Math.PI*2); ctx.fill();
-                    } else {
-                        ctx.strokeStyle = '#aaa'; ctx.lineWidth = 2;
-                        ctx.beginPath(); ctx.arc(180, 120 + (idx * 70), 20, 0, Math.PI*2); ctx.stroke();
-                        ctx.fillStyle = info.color;
-                        ctx.beginPath(); ctx.arc(180, 120 + (idx * 70), 10, 0, Math.PI*2); ctx.fill();
-                    }
-                    ctx.fillStyle = '#555';
-                    ctx.fillRect(525, 105 + (idx * 70), 15, 30);
-                });
-            }
-        }
-
-        // 최초 게임 생성 및 루프 가동
-        resetGame();
-        setInterval(animate, 1000 / 60); // 60FPS 타이밍 프레임 고정 가동
-    </script>
-</body>
-</html>
+                let innerLevel = Math.floor((score - (targetScoreForThisRound - 15)) / 5);
+                // 💡 절대적
