@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>생명과학 게임 - 활동전위 번개 에디션 (시냅스 완벽 수정본)</title>
+    <title>생명과학 게임 - 활동전위 번개 에디션 (오류 수정본)</title>
     <style>
         body {
             margin: 0;
@@ -120,6 +120,7 @@
         // --- 전역 게임 상태 제어 ---
         let currentPhase = 'SCENE1';
         let isGameOver = false;
+        let gameOverReason = "";
         let score = 0; 
         let lastTime = Date.now();
         let timeElapsed = 0;
@@ -144,9 +145,9 @@
         // --- 장면 2 (시냅스 페이즈) 데이터 ---
         const scene2TimeLimit = 4000; 
         const TYPE_INFO = {
-            'Ach':  { color: '#ff3333', shape: 'triangle', index: 0 },
-            'Da':   { color: '#3333ff', shape: 'square',   index: 1 },
-            'Gaba': { color: '#33cc33', shape: 'circle',   index: 2 }
+            'Ach':  { color: '#ff3333', shape: 'triangle', index: 0 }, // 빨강
+            'Da':   { color: '#3333ff', shape: 'square',   index: 1 }, // 파랑
+            'Gaba': { color: '#33cc33', shape: 'circle',   index: 2 }  // 초록
         };
         const TYPES = ['Ach', 'Da', 'Gaba'];
         let patternSequence = []; 
@@ -156,11 +157,11 @@
         let isPostNeuronGlowing = false;
         let successTimer = 0;
 
-        // 게임 완전 초기화
         function initGame() {
             score = 0; 
             currentPhase = 'SCENE1';
             isGameOver = false;
+            gameOverReason = "";
             currentTimeLimit = baseTimeLimit;
             targetScoreForThisRound = 15; 
             document.getElementById('scoreDisplay').innerText = score;
@@ -172,7 +173,6 @@
             gameInterval = setInterval(gameLoop, 1000 / 60);
         }
 
-        // 흥분 전도 루프 재진입 (기존 score 유지)
         function initScene1Activity() {
             player.x = 100;
             player.targetX = 100;
@@ -231,7 +231,7 @@
             } else {
                 stageLabel.innerText = "(시냅스 전달)";
                 stageLabel.style.color = "#ff3333";
-                guideLabel.innerText = "[1번] 아세틸콜린 / [2번] 도파민 / [3번] 가바";
+                guideLabel.innerText = "[1번] 아세틸콜린(빨) / [2번] 도파민(파) / [3번] 가바(초)";
             }
         }
 
@@ -310,7 +310,6 @@
         function pressScene2Button(type) {
             if (isGameOver || currentPhase !== 'SCENE2_INPUT') return;
 
-            // [오류 수정 핵심]: 현재 플레이어가 눌러야 하는 올바른 타겟 물질과 직접 비교
             let correctTarget = patternSequence[playerInputIndex];
 
             if (type === correctTarget) {
@@ -336,7 +335,12 @@
         }
 
         function triggerGameOver(reason) {
+            if (isGameOver) return;
             isGameOver = true;
+            gameOverReason = reason;
+        }
+
+        function drawGameOverScreen() {
             clearInterval(gameInterval);
             
             ctx.fillStyle = 'rgba(7, 10, 19, 0.95)';
@@ -349,7 +353,7 @@
 
             ctx.fillStyle = '#fff';
             ctx.font = '19px Malgun Gothic';
-            ctx.fillText(`사유: ${reason}`, canvas.width / 2, canvas.height / 2 + 25);
+            ctx.fillText(`사유: ${gameOverReason}`, canvas.width / 2, canvas.height / 2 + 25);
             ctx.fillText(`최종 기록 점수: ${score} 점`, canvas.width / 2, canvas.height / 2 + 65);
 
             ctx.fillStyle = '#00ffcc';
@@ -364,6 +368,11 @@
 
             update(delta);
             render();
+
+            // 루프 끝단에서 게임 오버 플래그 포착 시 렌더를 보장한 뒤 종료하도록 변경
+            if (isGameOver) {
+                drawGameOverScreen();
+            }
         }
 
         function update(delta) {
@@ -402,7 +411,7 @@
                 }
             } else if (currentPhase === 'SCENE2_PATTERN') {
                 patternTimer += delta;
-                if (patternTimer > 800) { // 가독성을 위해 암기 노출 시간을 0.8초로 소폭 상향
+                if (patternTimer > 800) { 
                     patternTimer = 0;
                     currentFlashIndex++;
                     if (currentFlashIndex >= patternSequence.length) {
@@ -458,6 +467,7 @@
         }
 
         function render() {
+            if (isGameOver) return; // 이미 끝났다면 일반 렌더링 스킵
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             if (currentPhase === 'SCENE1' || currentPhase === 'SCENE2_ARRIVE') {
@@ -551,7 +561,6 @@
                     let cy = 140 + idx * 60;
                     let info = TYPE_INFO[type];
 
-                    // 현재 컴퓨터가 해당 소포의 인덱스를 보여주는 타이밍인지 체크
                     let isFlashingNow = false;
                     if (currentPhase === 'SCENE2_PATTERN' && currentFlashIndex >= 0) {
                         if (patternSequence[currentFlashIndex] === type) {
