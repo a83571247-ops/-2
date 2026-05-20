@@ -56,7 +56,7 @@
             margin-top: 20px;
         }
         .game-btn {
-            width: 180px;
+            width: 150px;
             padding: 12px;
             font-size: 15px;
             font-weight: bold;
@@ -73,9 +73,9 @@
         }
         #naBtn   { background-color: #39ff14; color: black; } 
         #kBtn    { background-color: #ffea00; color: black; }  
-        #achBtn  { background-color: #ff3333; color: white; text-shadow: 1px 1px 1px #000; } 
-        #daBtn   { background-color: #3333ff; color: white; text-shadow: 1px 1px 1px #000; } 
-        #gabaBtn { background-color: #33cc33; color: white; text-shadow: 1px 1px 1px #000; } 
+        #redBtn  { background-color: #ff3333; color: white; text-shadow: 1px 1px 1px #000; } 
+        #blueBtn { background-color: #3333ff; color: white; text-shadow: 1px 1px 1px #000; } 
+        #yellowBtn { background-color: #ffea00; color: black; } 
 
         .game-btn:disabled {
             background-color: #555 !important;
@@ -106,40 +106,40 @@
     <div id="buttonContainer">
         <button id="naBtn" class="game-btn" onclick="handleScene1Input('Na')">나트륨 (1)</button>
         <button id="kBtn" class="game-btn" onclick="handleScene1Input('K')">칼륨 (2)</button>
-        <button id="achBtn" class="game-btn" onclick="pressScene2Button('Ach')" disabled>아세틸콜린 (1)</button>
-        <button id="daBtn" class="game-btn" onclick="pressScene2Button('Da')" disabled>도파민 (2)</button>
-        <button id="gabaBtn" class="game-btn" onclick="pressScene2Button('Gaba')" disabled>가바 (3)</button>
+        <button id="redBtn" class="game-btn" onclick="pressScene2Button('Red')" disabled>빨강 수용체 (3)</button>
+        <button id="blueBtn" class="game-btn" onclick="pressScene2Button('Blue')" disabled>파랑 수용체 (4)</button>
+        <button id="yellowBtn" class="game-btn" onclick="pressScene2Button('Yellow')" disabled>노랑 수용체 (6)</button>
     </div>
 
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
 
-        // 전역 메인 게임 상태: 'SCENE1' (전도), 'SCENE2_ARRIVE' (시냅스 진입), 'SCENE2_PATTERN' (암기), 'SCENE2_INPUT' (화학 입력), 'SUCCESS'
-        let currentPhase = 'SCENE1';
+        // 게임 상태 관리
+        let currentPhase = 'SCENE1'; // 'SCENE1', 'SCENE2_ARRIVE', 'SCENE2_PATTERN', 'SCENE2_INPUT', 'SUCCESS'
         let isGameOver = false;
         let score = 0;
         let lastTime = Date.now();
         let timeElapsed = 0;
 
         // --- 장면 1 (전도 페이즈) 변수 ---
-        let player = { x: 380, y: 190, radius: 14, targetX: 380, speed: 15 }; // 속도 최적화 고정
+        let player = { x: 380, y: 190, radius: 14, targetX: 380, speed: 15 };
         let cameraX = 0;
-        let baseTimeLimit = 1500; // 버그 수정을 위해 첫 제한시간을 1.5초로 안정화
+        let baseTimeLimit = 1500;
         let currentTimeLimit = 1500; 
         let blocks = [];
         let nextBlockX = 350;
         let currentBlockIndex = 0;
-        const TARGET_SCORE_TO_SYNAPSE = 15; // 15점에 도달하면 시냅스로 전환
+        const TARGET_SCORE_TO_SYNAPSE = 25; // 원하시는 대로 25점에 시냅스 전환 설정
 
         // --- 장면 2 (시냅스 페이즈) 변수 ---
-        const scene2TimeLimit = 4000; // 입력 단계 제한시간 4초
+        const scene2TimeLimit = 5000; // 입력 단계 5초 부여
         const TYPE_INFO = {
-            'Ach':  { color: '#ff3333', shape: 'triangle', name: '아세틸콜린' },
-            'Da':   { color: '#3333ff', shape: 'square',   name: '도파민' },
-            'Gaba': { color: '#33cc33', shape: 'circle',   name: '가바' }
+            'Red':    { color: '#ff3333', key: '3', name: '빨강(3)' },
+            'Blue':   { color: '#3333ff', key: '4', name: '파랑(4)' },
+            'Yellow': { color: '#ffea00', key: '6', name: '노랑(6)' }
         };
-        const TYPES = ['Ach', 'Da', 'Gaba'];
+        const TYPES = ['Red', 'Blue', 'Yellow'];
         let patternSequence = []; 
         let playerInputIndex = 0; 
         let patternTimer = 0;
@@ -147,16 +147,16 @@
         let isPostNeuronGlowing = false;
         let successTimer = 0;
 
-        // 키보드 통합 핸들러
+        // 키보드 이벤트 매핑 수정
         window.addEventListener('keydown', (e) => {
             if (isGameOver) return;
             if (currentPhase === 'SCENE1') {
                 if (e.key === '1') handleScene1Input('Na');
                 if (e.key === '2') handleScene1Input('K');
             } else if (currentPhase === 'SCENE2_INPUT') {
-                if (e.key === '1') pressScene2Button('Ach');
-                if (e.key === '2') pressScene2Button('Da');
-                if (e.key === '3') pressScene2Button('Gaba');
+                if (e.key === '3') pressScene2Button('Red');
+                if (e.key === '4') pressScene2Button('Blue');
+                if (e.key === '6') pressScene2Button('Yellow');
             }
         });
 
@@ -172,7 +172,6 @@
             nextBlockX += 260;
         }
 
-        // 흥분 전도 입력 처리
         function handleScene1Input(pressedType) {
             if (isGameOver || currentPhase !== 'SCENE1') return;
             if (player.x !== player.targetX) return; 
@@ -183,16 +182,15 @@
                 score++;
                 document.getElementById('scoreDisplay').innerText = score;
 
-                // 점수가 목표치에 도달하면 시냅스 단계로 전환 준비
                 if (score >= TARGET_SCORE_TO_SYNAPSE) {
                     currentPhase = 'SCENE2_ARRIVE';
-                    player.targetX = player.x + 200; // 축삭 돌기 말단 방향으로 이동
+                    player.targetX = player.x + 200;
                     timeElapsed = 0;
                     return;
                 }
 
                 let level = Math.floor(score / 5);
-                currentTimeLimit = Math.max(500, baseTimeLimit - (level * 200));
+                currentTimeLimit = Math.max(500, baseTimeLimit - (level * 100));
                 document.getElementById('timerLabel').innerText = `제한시간 (${(currentTimeLimit/1000).toFixed(2)}초)`;
 
                 currentBlockIndex++;
@@ -205,14 +203,13 @@
             }
         }
 
-        // 시냅스 단계 돌입 및 패턴 생성
         function startSynapsePhase() {
             currentPhase = 'SCENE2_PATTERN';
             document.getElementById('stageInfo').innerText = '(시냅스 전달)';
             document.getElementById('stageInfo').style.color = '#ff3333';
-            document.getElementById('guideText').innerText = '신경전달물질의 방출 패턴을 외우세요!';
+            document.getElementById('guideText').innerText = '안테나 수용체의 활성화 색상 순서를 기억하세요!';
             
-            // 아세틸콜린, 도파민, 가바 중 무작위 3개 패턴 생성
+            // 무작위 3색 수용체 배치 생성
             patternSequence = [];
             for (let i = 0; i < 3; i++) {
                 patternSequence.push(TYPES[Math.floor(Math.random() * TYPES.length)]);
@@ -223,38 +220,35 @@
             timeElapsed = 0;
         }
 
-        // 시냅스 입력 처리
         function pressScene2Button(type) {
             if (currentPhase !== 'SCENE2_INPUT' || isGameOver) return;
 
             if (patternSequence[playerInputIndex] === type) {
                 playerInputIndex++;
-                score += 2; // 시냅스 매칭 성공 시 보너스 점수
+                score += 3; // 시냅스 결합 성공 시 가산점
                 document.getElementById('scoreDisplay').innerText = score;
 
                 if (playerInputIndex >= patternSequence.length) {
-                    // 패턴 전체 암기 성공
                     currentPhase = 'SUCCESS';
                     isPostNeuronGlowing = true;
                     successTimer = 0;
                     document.getElementById('gaugeBar').style.width = '100%';
-                    document.getElementById('guideText').innerText = '💡 흥분 전달 성공! 다음 뉴런으로 자극이 이동합니다!';
+                    document.getElementById('guideText').innerText = '💡 신경전달물질 결합 성공! 자극이 다음 뉴런으로 전달됩니다!';
                 }
             } else {
-                triggerGameOver("신경전달물질 매칭에 실패하여 자극이 차단되었습니다!");
+                triggerGameOver("수용체와 맞지 않는 키를 입력하여 전달에 실패했습니다!");
             }
         }
 
-        // 버튼 활성화/비활성화 제어 함수
         function toggleButtons(phase) {
             const sc1 = (phase === 'SCENE1');
             const sc2 = (phase === 'SCENE2_INPUT');
             
             document.getElementById('naBtn').disabled = !sc1;
             document.getElementById('kBtn').disabled = !sc1;
-            document.getElementById('achBtn').disabled = !sc2;
-            document.getElementById('daBtn').disabled = !sc2;
-            document.getElementById('gabaBtn').disabled = !sc2;
+            document.getElementById('redBtn').disabled = !sc2;
+            document.getElementById('blueBtn').disabled = !sc2;
+            document.getElementById('yellowBtn').disabled = !sc2;
         }
 
         function triggerGameOver(message) {
@@ -277,7 +271,7 @@
             nextBlockX = 350;
             
             blocks = [];
-            for(let i = 0; i < 20; i++) { generateBlock(); }
+            for(let i = 0; i < 35; i++) { generateBlock(); }
 
             player = { x: blocks[0].x + 30, y: 190, radius: 14, targetX: blocks[0].x + 30, speed: 15 };
             cameraX = player.x - 120;
@@ -295,7 +289,39 @@
             animate();
         }
 
-        // [메인 루프 인터랙션 및 그래픽 시스템]
+        // 안테나 모양 수용체 그리기 헬퍼 함수
+        function drawAntennaReceptor(x, y, color, isGlowing, label) {
+            ctx.save();
+            // 수용체 지지대 틀
+            ctx.strokeStyle = '#555875';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(x - 25, y);
+            ctx.stroke();
+
+            // 안테나 반원형 접시 모양 (수용체 구조 표현)
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 3;
+            if (isGlowing) {
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = color;
+            }
+            ctx.beginPath();
+            ctx.arc(x - 25, y, 16, -Math.PI / 2, Math.PI / 2, true);
+            ctx.stroke();
+
+            // 안테나 중심 수신 침
+            ctx.fillStyle = color;
+            ctx.fillRect(x - 33, y - 2, 8, 4);
+
+            // 가이드 텍스트 라벨 (키 번호 표시)
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '11px sans-serif';
+            ctx.fillText(label, x + 15, y + 4);
+            ctx.restore();
+        }
+
         function animate() {
             if (isGameOver) return;
 
@@ -305,7 +331,7 @@
 
             toggleButtons(currentPhase);
 
-            // --- 페이즈별 업데이터 로직 ---
+            // --- 비즈니스 업데이트 로직 ---
             if (currentPhase === 'SCENE1') {
                 if (player.x < player.targetX) {
                     player.x += player.speed;
@@ -313,7 +339,6 @@
                 }
                 cameraX = player.x - 120;
 
-                // 타이머 연동 연산
                 if (player.x === player.targetX) {
                     timeElapsed += dt;
                     let pct = Math.max(0, 100 - (timeElapsed / currentTimeLimit) * 100);
@@ -327,7 +352,6 @@
                 }
             } 
             else if (currentPhase === 'SCENE2_ARRIVE') {
-                // 시냅스 전 뉴런 말단으로 연출 이동
                 if (player.x < player.targetX) {
                     player.x += 8;
                     cameraX += 6;
@@ -337,59 +361,53 @@
                 document.getElementById('gaugeBar').style.width = '100%';
             } 
             else if (currentPhase === 'SCENE2_PATTERN') {
-                // 상단 게이지 바 색상 변경 (붉은색 계열 화학 신호 강조)
                 document.getElementById('gaugeBar').style.backgroundColor = '#ff3333';
                 patternTimer += dt;
                 
-                // 0.8초 간격으로 패턴 전구 반짝임 구현
-                if (patternTimer > 800) {
+                if (patternTimer > 900) { // 인지할 수 있도록 패턴 플래시 시간 약간 상향
                     patternTimer = 0;
                     currentFlashIndex++;
                     if (currentFlashIndex >= patternSequence.length) {
-                        // 패턴 보여주기 종료 -> 플레이어 입력 단계 진입
                         currentPhase = 'SCENE2_INPUT';
                         currentFlashIndex = -1;
                         timeElapsed = 0;
                         playerInputIndex = 0;
-                        document.getElementById('guideText').innerText = '암기한 비밀번호(1, 2, 3번 키)를 순서대로 입력하세요!';
+                        document.getElementById('guideText').innerText = '매칭되는 안테나 수용체 키 [빨강:3] [파랑:4] [노랑:6] 을 차례대로 누르세요!';
                     }
                 }
                 document.getElementById('gaugeBar').style.width = '100%';
             } 
             else if (currentPhase === 'SCENE2_INPUT') {
-                // 입력 타이머 작동
                 timeElapsed += dt;
                 let pct = Math.max(0, 100 - (timeElapsed / scene2TimeLimit) * 100);
                 document.getElementById('gaugeBar').style.width = pct + '%';
                 document.getElementById('timerLabel').innerText = `제한시간 (${((scene2TimeLimit - timeElapsed)/1000).toFixed(2)}초)`;
 
                 if (timeElapsed >= scene2TimeLimit) {
-                    triggerGameOver("신경전달물질 분비 시간이 초과되었습니다!");
+                    triggerGameOver("신경전달물질 결합 제한 시간이 초과되었습니다!");
                     return;
                 }
             } 
             else if (currentPhase === 'SUCCESS') {
                 successTimer += dt;
                 if (successTimer > 2000) {
-                    // 성공 선언 2초 후 다시 1단계 전도 페이즈로 순환 무한 루프 구현
                     currentPhase = 'SCENE1';
                     isPostNeuronGlowing = false;
-                    baseTimeLimit = Math.max(400, baseTimeLimit - 150); // 한 사이클 돌 때마다 기본 난이도 상승
-                    score += 10; // 스테이지 클리어 보너스
+                    baseTimeLimit = Math.max(400, baseTimeLimit - 100); 
+                    score += 15; 
                     resetGame();
                     return;
                 }
             }
 
-            // --- 그래픽 렌더링 시스템 (HTML5 Canvas) ---
+            // --- 캔버스 그래픽 렌더링 ---
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             if (currentPhase === 'SCENE1' || currentPhase === 'SCENE2_ARRIVE') {
-                // 1단계: 전기적 전도 화면 구성
                 ctx.save();
                 ctx.translate(-cameraX, 0);
 
-                // 세포막 기본 축삭선
+                // 축삭선 신경세포막
                 ctx.strokeStyle = '#2d325a';
                 ctx.lineWidth = 6;
                 ctx.beginPath(); ctx.moveTo(0, 200); ctx.lineTo(player.x + 1200, 200); ctx.stroke();
@@ -414,70 +432,76 @@
                     }
                 });
 
-                // 주황색 전기 자극 캐릭터구
                 ctx.fillStyle = '#00e5ff'; ctx.shadowBlur = 10; ctx.shadowColor = '#00e5ff';
                 ctx.beginPath(); ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2); ctx.fill();
                 ctx.restore();
             } 
             else {
-                // 2단계: 시냅스 화학적 전달 화면 구성
-                // 시냅스 전 뉴런 말단 그리기
+                // 2단계: 시냅스 전달 시각화 화면
+                // 시냅스 전 뉴런 말단
                 ctx.fillStyle = '#222845';
                 ctx.beginPath(); ctx.arc(150, 200, 120, -Math.PI/2, Math.PI/2); ctx.fill();
                 ctx.fillRect(0, 80, 150, 240);
 
-                // 시냅스 후 뉴런 가지돌기 그리기
+                // 시냅스 후 뉴런 세포체
                 ctx.fillStyle = isPostNeuronGlowing ? '#00ffcc' : '#1b2234';
                 if (isPostNeuronGlowing) { ctx.shadowBlur = 25; ctx.shadowColor = '#00ffcc'; }
                 ctx.beginPath(); ctx.arc(650, 200, 120, Math.PI/2, -Math.PI/2); ctx.fill();
                 ctx.fillRect(650, 80, 150, 240);
                 ctx.shadowBlur = 0;
 
-                // 시냅스 틈 공간 선 표시
-                ctx.strokeStyle = '#3f48cc'; ctx.lineWidth = 2;
-                ctx.beginPath(); ctx.moveTo(275, 50); ctx.lineTo(275, 350); ctx.stroke();
-                ctx.beginPath(); ctx.moveTo(525, 50); ctx.lineTo(525, 350); ctx.stroke();
+                // 시냅스 틈 간격 구조선
+                ctx.strokeStyle = '#3f48cc'; ctx.lineWidth = 1;
+                ctx.setLineDash([4, 4]);
+                ctx.beginPath(); ctx.moveTo(270, 50); ctx.lineTo(270, 350); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(520, 50); ctx.lineTo(520, 350); ctx.stroke();
+                ctx.setLineDash([]);
 
-                // 암기해야 할 패턴의 시각적 힌트박스 렌더링
+                // 화면 중앙 상단: 현재 외워야 하거나 입력 중인 패턴 시각 자료 피드백
                 patternSequence.forEach((type, idx) => {
                     let info = TYPE_INFO[type];
-                    ctx.fillStyle = (idx === currentFlashIndex || currentPhase === 'SCENE2_INPUT') ? info.color : '#444';
+                    let isActive = (idx === currentFlashIndex || currentPhase === 'SCENE2_INPUT');
                     
-                    // 현재 입력 단계에서 플레이어가 맞춘 항목은 체크 표시 혹은 밝게 고정
                     if (currentPhase === 'SCENE2_INPUT' && idx < playerInputIndex) {
-                        ctx.fillStyle = '#111424'; // 맞춰서 지나간 자리는 연출상 어둡게 처리
+                        ctx.fillStyle = '#22263f'; // 완료 항목 디밍
+                    } else {
+                        ctx.fillStyle = isActive ? info.color : '#333';
                     }
-
-                    ctx.fillRect(300 + (idx * 70), 30, 50, 40);
-                    ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif';
-                    ctx.fillText(info.name[0]+info.name[1], 305 + (idx * 70), 55);
+                    ctx.fillRect(330 + (idx * 60), 25, 45, 30);
+                    
+                    ctx.fillStyle = (currentPhase === 'SCENE2_INPUT' && idx < playerInputIndex) ? '#555' : '#fff';
+                    ctx.font = 'bold 11px sans-serif';
+                    ctx.fillText(info.name, 335 + (idx * 60), 44);
                 });
 
-                // 중앙 공간에 화학 물질 수송 소포 및 수용체 연출 구현
+                // 시냅스 틈 사이의 화학 물질(신경전달물질 소포 및 수용체 연출)
                 patternSequence.forEach((type, idx) => {
                     let info = TYPE_INFO[type];
+                    let targetY = 120 + (idx * 75);
+
+                    // 1. 시냅스 전 뉴런 내부 소포 주머니 표현
+                    ctx.strokeStyle = '#888'; ctx.lineWidth = 2;
+                    ctx.beginPath(); ctx.arc(180, targetY, 18, 0, Math.PI*2); ctx.stroke();
+                    ctx.fillStyle = info.color;
+                    ctx.beginPath(); ctx.arc(180, targetY, 9, 0, Math.PI*2); ctx.fill();
+
+                    // 2. 입력에 성공하면 전달물질이 방출되어 결합하는 애니메이션 효과 구현
                     if (currentPhase === 'SCENE2_INPUT' && idx < playerInputIndex) {
-                        // 성공적으로 방출되어 결합하는 그래픽 연출
                         ctx.fillStyle = info.color;
-                        ctx.beginPath(); ctx.arc(500, 120 + (idx * 70), 12, 0, Math.PI*2); ctx.fill();
-                    } else {
-                        // 뉴런 내부에 대기 중인 소포 주머니
-                        ctx.strokeStyle = '#aaa'; ctx.lineWidth = 2;
-                        ctx.beginPath(); ctx.arc(180, 120 + (idx * 70), 20, 0, Math.PI*2); ctx.stroke();
-                        ctx.fillStyle = info.color;
-                        ctx.beginPath(); ctx.arc(180, 120 + (idx * 70), 10, 0, Math.PI*2); ctx.fill();
+                        ctx.shadowBlur = 10; ctx.shadowColor = info.color;
+                        ctx.beginPath(); ctx.arc(480, targetY, 10, 0, Math.PI*2); ctx.fill();
+                        ctx.shadowBlur = 0;
                     }
-                    
-                    // 수용체 구조틀 배치
-                    ctx.fillStyle = '#555';
-                    ctx.fillRect(525, 105 + (idx * 70), 15, 30);
+
+                    // 3. 시냅스 후 뉴런에 부착된 [안테나 모양 단백질 수용체 3개] 렌더링
+                    let isGlowing = (currentPhase === 'SCENE2_INPUT' && idx === playerInputIndex) || (currentPhase === 'SCENE2_PATTERN' && idx === currentFlashIndex);
+                    drawAntennaReceptor(530, targetY, info.color, isGlowing, info.name);
                 });
             }
 
             requestAnimationFrame(animate);
         }
 
-        // 게임 최초 구동 트리거
         resetGame();
     </script>
 </body>
