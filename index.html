@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>생명과학 게임 - 통합 안정화 단계</title>
+    <title>생명과학 게임 - 활동전위 번개 에디션</title>
     <style>
         body {
             margin: 0;
@@ -91,7 +91,7 @@
 <body>
 
     <div id="uiContainer">
-        <div>현재 점수: <span id="scoreDisplay">0</span> 점 <span id="stageInfo" style="color:#00ffcc; margin-left:10px;">(흥분 전도)</span></div>
+        <div>현재 누적 점수: <span id="scoreDisplay">0</span> 점 <span id="stageInfo" style="color:#00ffcc; margin-left:10px;">(흥분 전도)</span></div>
         <div id="guideText" style="font-size: 14px; color: #aaa;">[1번] 나트륨 개방 / [2번] 칼륨 개방</div>
         <div style="display: flex; align-items: center; gap: 10px;">
             <span id="timerLabel">제한시간 (1.50초)</span>
@@ -117,36 +117,36 @@
 
         let gameInterval = null;
 
-        // --- 전역 게임 상태 ---
+        // --- 전역 게임 상태 제어 ---
         let currentPhase = 'SCENE1';
         let isGameOver = false;
-        let score = 0;
+        let score = 0; // 전역 스코어로 단 한 번만 선언 (리셋 금지)
         let lastTime = Date.now();
         let timeElapsed = 0;
 
-        // --- 난이도 조절 시스템 ---
-        let baseTimeLimit = 1500;       // 최초 시작 제한시간 (ms)
-        let currentTimeLimit = 1500;    // 현재 라운드 제한시간 (ms)
-        const difficultyStep = 150;     // 시냅스 클리어 시마다 단축될 시간 (ms)
-        const minimumTimeLimit = 600;   // 한계 속도 제한 (ms)
+        // --- 난이도 조절 변수 ---
+        let baseTimeLimit = 1500;       
+        let currentTimeLimit = 1500;    
+        const difficultyStep = 150;     
+        const minimumTimeLimit = 600;   
 
-        // --- 장면 1 (전도 페이즈) 변수 ---
-        let player = { x: 100, y: 200, radius: 14, targetX: 100, speed: 15 }; 
+        // --- 장면 1 (전도 페이즈) 핵심 데이터 ---
+        let player = { x: 100, y: 195, targetX: 100, speed: 15 }; 
         let cameraX = 0;
         let blocks = [];
         let nextBlockX = 250;
         let currentBlockIndex = 0;
-        let targetScoreForThisRound = 15; // 이번 라운드 목표 점수 (누적치 기준)
+        let targetScoreForThisRound = 15; // 이번 라운드에 달성해야 할 누적 타겟 점수
 
         let ambientParticles = [];
         let transportParticles = [];
 
-        // --- 장면 2 (시냅스 페이즈) 변수 ---
+        // --- 장면 2 (시냅스 페이즈) 핵심 데이터 ---
         const scene2TimeLimit = 4000; 
         const TYPE_INFO = {
-            'Ach':  { color: '#ff3333', shape: 'triangle', name: '아세틸콜린' },
-            'Da':   { color: '#3333ff', shape: 'square',   name: '도파민' },
-            'Gaba': { color: '#33cc33', shape: 'circle',   name: '가바' }
+            'Ach':  { color: '#ff3333', shape: 'triangle' },
+            'Da':   { color: '#3333ff', shape: 'square' },
+            'Gaba': { color: '#33cc33', shape: 'circle' }
         };
         const TYPES = ['Ach', 'Da', 'Gaba'];
         let patternSequence = []; 
@@ -156,14 +156,15 @@
         let isPostNeuronGlowing = false;
         let successTimer = 0;
 
-        // 최초 게임 초기화 함수
+        // 게임 완전 초기화 (첫 시작 또는 재시작 시점)
         function initGame() {
-            score = 0;
+            score = 0; 
             currentPhase = 'SCENE1';
             isGameOver = false;
             currentTimeLimit = baseTimeLimit;
-            targetScoreForThisRound = 15;
+            targetScoreForThisRound = 15; 
             document.getElementById('scoreDisplay').innerText = score;
+            
             initScene1Activity();
 
             if (gameInterval) clearInterval(gameInterval);
@@ -171,7 +172,7 @@
             gameInterval = setInterval(gameLoop, 1000 / 60);
         }
 
-        // 흥분 전도 단계 진입/재진입 시 데이터 리셋 (기존 점수 유지)
+        // 흥분 전도 루프 재진입 제어 (기존 score 축적 데이터 절대 유지)
         function initScene1Activity() {
             player.x = 100;
             player.targetX = 100;
@@ -181,8 +182,8 @@
             currentBlockIndex = 0;
             timeElapsed = 0;
 
-            // 라운드 진입 시 채워질 블록 미리 생성
-            for (let i = 0; i < 20; i++) {
+            // 라운드 요구치에 충족되는 축삭돌기 막 단백질 통로 생성
+            for (let i = 0; i < 30; i++) {
                 generateBlock();
             }
             initAmbientParticles();
@@ -195,8 +196,7 @@
             blocks.push({
                 x: nextBlockX,
                 type: randomType,
-                color: (randomType === 'Na') ? '#39ff14' : '#ffea00',
-                isMyelin: Math.random() > 0.4
+                color: (randomType === 'Na') ? '#39ff14' : '#ffea00'
             });
             nextBlockX += 260;
         }
@@ -205,7 +205,7 @@
             ambientParticles = [];
             for (let i = 0; i < 80; i++) {
                 ambientParticles.push({
-                    x: Math.random() * 6000,
+                    x: Math.random() * 8000,
                     y: Math.random() > 0.5 ? 40 + Math.random() * 110 : 250 + Math.random() * 110,
                     type: Math.random() > 0.5 ? 'Na' : 'K',
                     radius: 2 + Math.random() * 2
@@ -237,29 +237,27 @@
         }
 
         function triggerIonTransportAnimation(gateX, ionType) {
-            const burstCount = 25; 
+            const burstCount = 20; 
             if (ionType === 'Na') {
                 for (let i = 0; i < burstCount; i++) {
                     transportParticles.push({
-                        x: gateX + (Math.random() - 0.5) * 50,
-                        y: 15 + Math.random() * 70, 
-                        targetY: 170 + Math.random() * 60, 
+                        x: gateX + (Math.random() - 0.5) * 40,
+                        y: 15 + Math.random() * 60, 
+                        targetY: 170 + Math.random() * 50, 
                         color: '#39ff14',
-                        speedY: 5 + Math.random() * 4,
-                        speedX: (Math.random() - 0.5) * 2,
-                        type: 'Na'
+                        speedY: 6 + Math.random() * 4,
+                        speedX: (Math.random() - 0.5) * 2
                     });
                 }
             } else if (ionType === 'K') {
                 for (let i = 0; i < burstCount; i++) {
                     transportParticles.push({
-                        x: gateX + (Math.random() - 0.5) * 20,
-                        y: 200 + Math.random() * 30, 
+                        x: gateX + (Math.random() - 0.5) * 40,
+                        y: 235 + Math.random() * 20, 
                         targetY: 20 + Math.random() * 70, 
                         color: '#ffea00',
-                        speedY: -(5 + Math.random() * 4), 
-                        speedX: (Math.random() - 0.5) * 4, 
-                        type: 'K'
+                        speedY: -(6 + Math.random() * 4), 
+                        speedX: (Math.random() - 0.5) * 2
                     });
                 }
             }
@@ -275,16 +273,15 @@
             if (pressedType === targetBlock.type) {
                 triggerIonTransportAnimation(targetBlock.x + 15, pressedType);
 
-                // 점수 누적 처리
+                // 점수 가산 및 동기화 (리셋 없이 누적됨)
                 score++;
                 document.getElementById('scoreDisplay').innerText = score;
 
-                // 다음 이온 통로로 이동 설정
                 player.targetX = targetBlock.x + 15;
                 currentBlockIndex++;
-                timeElapsed = 0; // 성공 시 타이머 리셋
+                timeElapsed = 0; 
 
-                // 흥분 전도 목표 완료 검사
+                // 현재 라운드 목표치 돌파 검사
                 if (score >= targetScoreForThisRound) {
                     currentPhase = 'SCENE2_ARRIVE';
                     player.targetX = player.x + 250; 
@@ -294,17 +291,14 @@
                     return;
                 }
             } else {
-                // 오입력 페널티: 제한 시간 단축 페널티 처리 가능 (여기선 즉시 탈분극/과분극 실패 유도)
-                timeElapsed += currentTimeLimit * 0.2;
+                timeElapsed += currentTimeLimit * 0.15; // 오입력 페널티
             }
         }
 
-        // --- 시냅스 시퀀스 진입 제어 ---
         function startScene2() {
             currentPhase = 'SCENE2_PATTERN';
             toggleButtons();
             
-            // 암기 패턴 생성 (3개 랜덤 콤보)
             patternSequence = [];
             for (let i = 0; i < 3; i++) {
                 patternSequence.push(TYPES[Math.floor(Math.random() * TYPES.length)]);
@@ -322,25 +316,24 @@
             if (patternSequence[playerInputIndex] === type) {
                 playerInputIndex++;
                 if (playerInputIndex >= patternSequence.length) {
-                    // 전달 성공 처리
                     currentPhase = 'SCENE2_SUCCESS';
                     successTimer = 0;
                     isPostNeuronGlowing = true;
-                    score += 5; // 시냅스 돌파 보너스 누적점수 부여!
+                    
+                    // 시냅스 클리어 보너스 점수 누적 처리
+                    score += 5; 
                     document.getElementById('scoreDisplay').innerText = score;
                 }
             } else {
-                // 시냅스 오답 시 즉시 게임 오버 처리
-                triggerGameOver("신경전달물질 결합 오류 (교차 수용체 불일치)");
+                triggerGameOver("신경전달물질 수용체 결합 오류");
             }
         }
 
-        // 입력 대기 시점 난이도 강화 처리
         function completeScene2AndLoopBack() {
-            // 차기 타겟 스코어 확장 (현재 누적 점수 + 15)
+            // [정상화 핵심]: 점수 리셋 없이 현재 누적 점수에 다음 목표치를 덧셈
             targetScoreForThisRound = score + 15;
 
-            // 제한시간 감소를 통한 유기적 난이도 조절 
+            // 속도 제어 난이도 상향
             currentTimeLimit = Math.max(minimumTimeLimit, currentTimeLimit - difficultyStep);
 
             currentPhase = 'SCENE1';
@@ -351,25 +344,25 @@
             isGameOver = true;
             clearInterval(gameInterval);
             
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+            ctx.fillStyle = 'rgba(7, 10, 19, 0.9)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             ctx.fillStyle = '#ff3333';
             ctx.font = 'bold 36px Malgun Gothic';
             ctx.textAlign = 'center';
-            ctx.fillText('GAME OVER (활동전위 파괴)', canvas.width / 2, canvas.height / 2 - 20);
+            ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 20);
 
             ctx.fillStyle = '#fff';
-            ctx.font = '20px Malgun Gothic';
+            ctx.font = '19px Malgun Gothic';
             ctx.fillText(`사유: ${reason}`, canvas.width / 2, canvas.height / 2 + 25);
-            ctx.fillText(`최종 누적 점수: ${score} 점`, canvas.width / 2, canvas.height / 2 + 65);
+            ctx.fillText(`최종 기록 점수: ${score} 점`, canvas.width / 2, canvas.height / 2 + 65);
 
             ctx.fillStyle = '#00ffcc';
-            ctx.font = '16px Malgun Gothic';
-            ctx.fillText('새로고침(F5)을 누르거나 화면을 다시 로드하여 재도전하세요.', canvas.width / 2, canvas.height / 2 + 120);
+            ctx.font = '15px Malgun Gothic';
+            ctx.fillText('화면을 새로고침하여 활동전위를 다시 발생시키세요.', canvas.width / 2, canvas.height / 2 + 120);
         }
 
-        // --- 메인 게임 루프 엔진 ---
+        // --- 메인 드라이브 루프 엔진 ---
         function gameLoop() {
             let now = Date.now();
             let delta = now - lastTime;
@@ -382,19 +375,15 @@
         function update(delta) {
             if (isGameOver) return;
 
-            // 1. 플레이어 스무스 스크롤 이동 연산
             if (player.x < player.targetX) {
                 player.x += player.speed;
                 if (player.x > player.targetX) player.x = player.targetX;
             }
-            // 카메라가 플레이어를 뒤따라가도록 설정
             cameraX = player.x - 150;
 
-            // 2. 페이즈별 상태 업데이트 구조
             if (currentPhase === 'SCENE1') {
                 timeElapsed += delta;
                 
-                // 전도 단계 화면 UI 동적 계산 (currentTimeLimit 적용)
                 let remainSec = Math.max(0, (currentTimeLimit - timeElapsed) / 1000);
                 document.getElementById('timerLabel').innerText = `제한시간 (${remainSec.toFixed(2)}초)`;
                 let gaugePercent = Math.max(0, 100 - (timeElapsed / currentTimeLimit) * 100);
@@ -402,10 +391,9 @@
                 document.getElementById('gaugeBar').style.backgroundColor = '#00ffcc';
 
                 if (timeElapsed >= currentTimeLimit) {
-                    triggerGameOver("탈분극 임계값 미도달 (흥분 전도 시간 초과)");
+                    triggerGameOver("탈분극 전도 임계 시간 초과");
                 }
 
-                // 이온 입자 로직 업데이트
                 transportParticles.forEach((p, idx) => {
                     p.y += p.speedY;
                     p.x += p.speedX;
@@ -415,18 +403,17 @@
                 });
 
             } else if (currentPhase === 'SCENE2_ARRIVE') {
-                // 시냅스 전 뉴런 말단으로 진입 연산
                 if (player.x === player.targetX) {
                     startScene2();
                 }
             } else if (currentPhase === 'SCENE2_PATTERN') {
                 patternTimer += delta;
-                if (patternTimer > 600) { // 0.6초 간격 순차 점등 암기 유도
+                if (patternTimer > 600) { 
                     patternTimer = 0;
                     currentFlashIndex++;
                     if (currentFlashIndex >= patternSequence.length) {
                         currentFlashIndex = -1;
-                        currentPhase = 'SCENE2_INPUT'; // 플레이어 제어권 양도
+                        currentPhase = 'SCENE2_INPUT'; 
                         toggleButtons();
                         timeElapsed = 0;
                     }
@@ -435,21 +422,49 @@
                 timeElapsed += delta;
                 
                 let remainSec = Math.max(0, (scene2TimeLimit - timeElapsed) / 1000);
-                document.getElementById('timerLabel').innerText = `물질 확산제한 (${remainSec.toFixed(2)}초)`;
+                document.getElementById('timerLabel').innerText = `제한시간 (${remainSec.toFixed(2)}초)`;
                 let gaugePercent = Math.max(0, 100 - (timeElapsed / scene2TimeLimit) * 100);
                 document.getElementById('gaugeBar').style.width = `${gaugePercent}%`;
                 document.getElementById('gaugeBar').style.backgroundColor = '#ff3333';
 
                 if (timeElapsed >= scene2TimeLimit) {
-                    triggerGameOver("시냅스 틈새 확산 실패 (신경전달 누락)");
+                    triggerGameOver("신경전달물질 확산 한계 시간 초과");
                 }
             } else if (currentPhase === 'SCENE2_SUCCESS') {
                 successTimer += delta;
-                if (successTimer > 1200) { // 연출 성공 후 다음 라운드로 복귀
+                if (successTimer > 1200) { 
                     isPostNeuronGlowing = false;
                     completeScene2AndLoopBack();
                 }
             }
+        }
+
+        // [추가 기능]: 번개 그래픽 벡터 패스 렌더링 함수
+        function drawLightningCharacter(ctx, x, y) {
+            ctx.save();
+            ctx.translate(x, y);
+            
+            // 번개 특유의 네온 발광 효과(Glow Effect) 지정
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#00ffff';
+            ctx.fillStyle = '#f39c12';
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+
+            ctx.beginPath();
+            // 번개 모양 벡터 좌표 정밀 매핑
+            ctx.moveTo(-5, -25);  // 상단 시작점
+            ctx.lineTo(12, -10);  // 우측 상단 꺾임
+            ctx.lineTo(2, -2);    // 중앙 대기선
+            ctx.lineTo(15, 10);   // 우측 하단 꺾임
+            ctx.lineTo(-2, 28);   // 최하단 뾰족한 포인트
+            ctx.lineTo(-2, 8);    // 좌측 하단 안쪽 복귀
+            ctx.lineTo(-10, 2);   // 좌측 대기선
+            ctx.closePath();
+            
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
         }
 
         function render() {
@@ -459,16 +474,14 @@
                 ctx.save();
                 ctx.translate(-cameraX, 0);
 
-                // 축삭돌기 상단/하단 막 구조 시각화
+                // 세포막 기본 경계 렌더링
                 ctx.fillStyle = '#2c3e50';
                 ctx.fillRect(cameraX, 150, canvas.width, 10);
                 ctx.fillRect(cameraX, 240, canvas.width, 10);
                 
-                // 세포막 전위 안정 상태 배경 유도
                 ctx.fillStyle = 'rgba(63, 72, 204, 0.08)';
                 ctx.fillRect(cameraX, 160, canvas.width, 80);
 
-                // 주변 배경 고정 이온 묘사
                 ambientParticles.forEach(p => {
                     ctx.fillStyle = (p.type === 'Na') ? 'rgba(57, 255, 20, 0.4)' : 'rgba(255, 234, 0, 0.4)';
                     ctx.beginPath();
@@ -476,18 +489,11 @@
                     ctx.fill();
                 });
 
-                // 배치된 게이트(이온 통로) 드로잉
                 blocks.forEach((b, index) => {
                     ctx.fillStyle = b.color;
                     ctx.fillRect(b.x, 140, 30, 10);
                     ctx.fillRect(b.x, 250, 30, 10);
 
-                    ctx.strokeStyle = '#fff';
-                    ctx.lineWidth = 1;
-                    ctx.strokeRect(b.x, 140, 30, 10);
-                    ctx.strokeRect(b.x, 250, 30, 10);
-
-                    // 타겟 인덱스 텍스트 가이드 출력
                     if (index === currentBlockIndex && currentPhase === 'SCENE1') {
                         ctx.fillStyle = '#fff';
                         ctx.font = 'bold 13px Malgun Gothic';
@@ -503,7 +509,6 @@
                     }
                 });
 
-                // 실시간 통과 이온 버스트 이펙트 연출
                 transportParticles.forEach(p => {
                     ctx.fillStyle = p.color;
                     ctx.beginPath();
@@ -511,20 +516,13 @@
                     ctx.fill();
                 });
 
-                // 흥분 전도 활동전위 주체(플레이어 구체) 
-                ctx.fillStyle = '#ff007f';
-                ctx.shadowBlur = 15;
-                ctx.shadowColor = '#ff007f';
-                ctx.beginPath();
-                ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.shadowBlur = 0; 
+                // [변경 부]: 기존 원형 구체를 삭제하고 역동적인 번개 캐릭터 배치
+                drawLightningCharacter(ctx, player.x, player.y);
 
                 ctx.restore();
 
             } else {
-                // --- 시냅스 전달(SCENE2 계열) 독자 화면 렌더링 부 ---
-                // 축삭 말단(Pre-synaptic) 구조 설계
+                // --- 시냅스 드로잉 영역 ---
                 ctx.fillStyle = '#1f2438';
                 ctx.beginPath();
                 ctx.moveTo(0, 100);
@@ -537,9 +535,8 @@
                 ctx.lineWidth = 3;
                 ctx.stroke();
 
-                // 시냅스 이후 뉴런(Post-synaptic) 수용체 영역 설계
                 if (isPostNeuronGlowing) {
-                    ctx.fillStyle = 'rgba(0, 255, 204, 0.35)'; // 성공 시 강한 도파민/아세틸콜린 수용 이펙트
+                    ctx.fillStyle = 'rgba(0, 255, 204, 0.35)'; 
                     ctx.shadowBlur = 25;
                     ctx.shadowColor = '#00ffcc';
                 } else {
@@ -556,19 +553,16 @@
                 ctx.stroke();
                 ctx.shadowBlur = 0;
 
-                // 중앙 상단 패턴 가이드 UI 배치
                 ctx.fillStyle = '#fff';
                 ctx.font = '16px Malgun Gothic';
                 ctx.textAlign = 'center';
                 ctx.fillText('시냅스 소포 신경전달물질 분비 링크 패턴', 400, 40);
 
-                // 시냅스 소포 시각 이펙트 드로잉
                 TYPES.forEach((type, idx) => {
                     let cx = 160;
                     let cy = 140 + idx * 60;
                     let info = TYPE_INFO[type];
 
-                    // 패턴 점등 이펙트 하이라이트 연산
                     if (currentPhase === 'SCENE2_PATTERN' && currentFlashIndex === idx) {
                         ctx.fillStyle = info.color;
                         ctx.beginPath();
@@ -576,7 +570,6 @@
                         ctx.fill();
                     }
 
-                    // 기본 소포 원형 외곽 그리기
                     ctx.fillStyle = '#0f111a';
                     ctx.beginPath();
                     ctx.arc(cx, cy, 20, 0, Math.PI * 2);
@@ -585,7 +578,6 @@
                     ctx.lineWidth = 2;
                     ctx.stroke();
 
-                    // 내부 화학 분자 시각화 표기
                     ctx.fillStyle = info.color;
                     if (info.shape === 'triangle') {
                         ctx.beginPath();
@@ -603,13 +595,11 @@
                     }
                 });
 
-                // 플레이어 입력 진척도 매핑 헬퍼 인터페이스
                 if (currentPhase === 'SCENE2_INPUT') {
                     ctx.fillStyle = '#aaa';
                     ctx.font = '15px Malgun Gothic';
                     ctx.fillText('보여진 소포의 순서대로 물질 버튼을 입력하세요!', 400, 370);
 
-                    // 하단 콤보 도트 처리
                     for (let i = 0; i < patternSequence.length; i++) {
                         ctx.fillStyle = (i < playerInputIndex) ? '#00ffcc' : '#444';
                         ctx.beginPath();
@@ -621,12 +611,11 @@
                 if (currentPhase === 'SCENE2_SUCCESS') {
                     ctx.fillStyle = '#00ffcc';
                     ctx.font = 'bold 24px Malgun Gothic';
-                    ctx.fillText('✔ 흥분성/억제성 시냅스 전달 성공! 후극 전위 발생.', 400, 200);
+                    ctx.fillText('✔ 시냅스 전달 성공! 후극 전위 활성화', 400, 200);
                 }
             }
         }
 
-        // 키보드 입력 매핑 처리
         window.addEventListener('keydown', (e) => {
             if (isGameOver) return;
             if (currentPhase === 'SCENE1') {
@@ -639,7 +628,7 @@
             }
         });
 
-        // 초기 시작 동작 트리거
+        // 엔트리 트리거 활성화
         initGame();
     </script>
 </body>
