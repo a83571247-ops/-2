@@ -39,6 +39,7 @@
             width: 100%;
             height: 100%;
             background-color: #00ffcc;
+            transition: width 0.05s linear;
         }
         canvas {
             background-color: #111424;
@@ -80,7 +81,7 @@
         <div>현재 점수: <span id="scoreDisplay">0</span> 점</div>
         <div style="font-size: 14px; color: #aaa;">[1번] 이나 [2번] 키를 누르거나 하단 버튼을 클릭하세요!</div>
         <div style="display: flex; align-items: center; gap: 10px;">
-            <span id="timerLabel">제한시간 (0.50초)</span>
+            <span>제한시간</span>
             <div id="gaugeContainer">
                 <div id="gaugeBar"></div>
             </div>
@@ -99,15 +100,11 @@
         const ctx = canvas.getContext('2d');
 
         // [게임 및 캐릭터 상태 변수]
-        let player = { x: 100, y: 190, radius: 14, targetX: 100, speed: 8 };
+        let player = { x: 100, y: 190, radius: 14, targetX: 100, speed: 6 };
         let cameraX = 0;
         let score = 0;
-
-        // [시간 관리 시스템 변수]
-        let baseTimeLimit = 500; // 기본 제한시간 0.5초 (500밀리초)
-        let currentTimeLimit = 500; 
-        let timeElapsed = 0;    // 발판 도달 후 흐른 시간
-        let lastTime = performance.now();
+        let gauge = 100;
+        let drainSpeed = 0.35; // 기본 게이지 감소 속도
 
         // [무한 맵 발판 데이터 생성]
         let blocks = [];
@@ -117,15 +114,15 @@
         function generateBlock() {
             let types = ['Na', 'K'];
             let randomType = types[Math.floor(Math.random() * types.length)];
-            let color = (randomType === 'Na') ? '#39ff14' : '#ffea00';
+            let color = (randomType === 'Na') ? '#39ff14' : '#ffea00'; // Na=연두, K=노랑
             
             blocks.push({
                 x: nextBlockX,
                 type: randomType,
                 color: color,
-                isMyelin: Math.random() > 0.4
+                isMyelin: Math.random() > 0.4 // 말이집(마디)인지 랑비에결절(통로)인지 랜덤 묘사용
             });
-            nextBlockX += 260;
+            nextBlockX += 260; // 발판 간 간격
         }
 
         // 초기 시작 발판 10개 선행 배치
@@ -137,78 +134,150 @@
             if (e.key === '2') handleInput('K');
         });
 
-        // [핵심 판정 로직]
+        // [핵심 판정 로직: 키보드/마우스 입력 공통 처리]
         function handleInput(pressedType) {
-            // 캐릭터가 다음 구역으로 달려가는 도중에는 중복 입력 방지
+            // 캐릭터가 이동 중일 때는 연속 입력 방지
             if (player.x !== player.targetX) return;
 
             let targetBlock = blocks[currentBlockIndex];
 
-            // 1. 성공 판정
+            // 1. 알맞은 신호(색상) 버튼을 정상적으로 누른 경우 (성공)
             if (pressedType === targetBlock.type) {
                 score++;
                 document.getElementById('scoreDisplay').innerText = score;
                 
-                // 💡 [규칙 반영] 10의 배수로 점수가 커질수록 제한시간 0.1초(100ms)씩 감소 (최소 0.1초 유지)
-                let level = Math.floor(score / 10);
-                currentTimeLimit = Math.max(100, baseTimeLimit - (level * 100));
-                document.getElementById('timerLabel').innerText = `제한시간 (${(currentTimeLimit/1000).toFixed(2)}초)`;
+                // 난이도 상승 규칙 (점수별 게이지 감소 속도 업)
+                if (score >= 20) drainSpeed = 0.7;
+                else if (score >= 10) drainSpeed = 0.5;
 
-                // 다음 발판 위치로 타겟 설정 및 진행도 업
+                // 다음 발판(결절)으로 횡스크롤 카메라 추적 연동 전진
                 player.targetX = targetBlock.x + 30;
                 currentBlockIndex++;
-                
-                // 시간 타이머 리셋
-                timeElapsed = 0;
+                gauge = 100; // 성공 시 제한시간 초기화
 
+                // 무한 맵 유지를 위해 새 발판 뒤에 추가
                 generateBlock();
             } 
-            // 2. 오답 판정
+            // 2. 잘못된 버튼을 누른 경우 (게임 오버)
             else {
                 triggerGameOver("잘못된 이온 버튼을 눌렀습니다!");
             }
         }
 
+        // [게임 오버 처리 함수]
         function triggerGameOver(message) {
             alert("게임 오버! \n이유: " + message + "\n최종 점수: " + score + "점");
             resetGame();
         }
 
+        // [게임 리셋 함수]
         function resetGame() {
-            player = { x: 100, y: 190, radius: 14, targetX: 100, speed: 8 };
+            player = { x: 100, y: 190, radius: 14, targetX: 100, speed: 6 };
             cameraX = 0;
             score = 0;
-            currentTimeLimit = baseTimeLimit;
-            timeElapsed = 0;
+            gauge = 100;
+            drainSpeed = 0.35;
             document.getElementById('scoreDisplay').innerText = score;
-            document.getElementById('timerLabel').innerText = `제한시간 (${(baseTimeLimit/1000).toFixed(2)}초)`;
             document.getElementById('gaugeBar').style.width = '100%';
             
             blocks = [];
             nextBlockX = 350;
             currentBlockIndex = 0;
             for(let i = 0; i < 10; i++) { generateBlock(); }
-            lastTime = performance.now();
         }
 
-        // [메인 게임 루프]
-        function animate(timestamp) {
-            // 델타 타임 계산 (컴퓨터 성능 편차 차단)
-            let dt = timestamp - lastTime;
-            if (isNaN(dt)) dt = 0;
-            lastTime = timestamp;
-
-            // 캐릭터 이동 메커니즘
+        // [메인 그래픽 및 연출 루프]
+        function animate() {
+            // 캐릭터 이동 연출 (자동 전진 메커니즘)
             if (player.x < player.targetX) {
                 player.x += player.speed;
                 if (player.x > player.targetX) player.x = player.targetX;
             }
 
+            // 카메라 위치 실시간 추적 (캐릭터가 항상 화면 왼쪽에 위치하도록 횡스크롤)
             cameraX = player.x - 120;
 
-            // 💡 [핵심 수정] 캐릭터가 발판에 완벽히 서서 다음 입력을 기다릴 때만 시간이 흐르도록 설정
+            // [제한시간 체크 및 게이지 감소]
             let activeBlock = blocks[currentBlockIndex];
-            let isWaitingInput = (player.x === player.targetX);
+            // 유저가 신호 구간(발판 전방 180px)에 진입하면 게이지가 줄어들기 시작
+            if (player.x >= activeBlock.x - 180) {
+                gauge -= drainSpeed;
+                if (gauge < 0) gauge = 0;
+                document.getElementById('gaugeBar').style.width = gauge + '%';
+            }
 
-            if (isWaitingInput) {
-                timeElapsed +=
+            // 게이지가 0이 되면 시간 초과로 게임오버 처리
+            if (gauge <= 0) {
+                triggerGameOver("시간 안에 이온 통로를 개방하지 못했습니다!");
+                requestAnimationFrame(animate);
+                return;
+            }
+
+            // 화면 그리기 초기화
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            ctx.translate(-cameraX, 0);
+
+            // 1. [배경 연출] 뉴런 세포막 뼈대 (가로 선)
+            ctx.strokeStyle = '#2d325a';
+            ctx.lineWidth = 6;
+            ctx.beginPath();
+            ctx.moveTo(0, 200);
+            ctx.lineTo(player.x + 1000, 200);
+            ctx.stroke();
+
+            // 2. [맵 구조 연출] 말이집(Myelin)과 랑비에 결절 표현 및 빛나는 발판 신호
+            blocks.forEach((b, idx) => {
+                // 말이집 묘사 (소시지 모양의 회색 덩어리)
+                if (b.isMyelin && idx !== currentBlockIndex) {
+                    ctx.fillStyle = '#3a3f58';
+                    ctx.fillRect(b.x - 120, 185, 100, 30);
+                }
+
+                // 랑비에 결절 / 신호 발판 그리기
+                ctx.fillStyle = b.color;
+                // 현재 맞춰야 하는 타겟 발판은 은은하게 빛나는 효과(Glow) 추가
+                if (idx === currentBlockIndex) {
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = b.color;
+                } else {
+                    ctx.shadowBlur = 0;
+                }
+                
+                // 발판 구조물 렌더링
+                ctx.fillRect(b.x, 190, 60, 20);
+                ctx.shadowBlur = 0; // 다른 그림에 영향 안 주게 초기화
+
+                // 이온 기호 및 번호 힌트 텍스트 렌더링
+                ctx.fillStyle = '#000000';
+                ctx.font = 'bold 12px sans-serif';
+                ctx.fillText(b.type === 'Na' ? 'Na+ (1)' : 'K+ (2)', b.x + 8, 205);
+
+                // 현재 타겟 발판 가이드 표시 (▼)
+                if (idx === currentBlockIndex) {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = 'bold 18px sans-serif';
+                    ctx.fillText('▼', b.x + 20, 175);
+                }
+            });
+
+            // 3. [유저 캐릭터] 뉴런 위를 달리는 액션 캐릭터 (시각성 좋은 시안블루 원)
+            ctx.fillStyle = '#00e5ff';
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#00e5ff';
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0; // 초기화
+
+            ctx.restore();
+
+            requestAnimationFrame(animate);
+        }
+
+        // 최초 실행
+        animate();
+    </script>
+</body>
+</html>
