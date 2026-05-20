@@ -99,16 +99,17 @@
         const ctx = canvas.getContext('2d');
 
         // [게임 및 캐릭터 상태 변수]
-        // 💡 첫 번째 발판 위치인 380에 안착한 상태로 시작하도록 세팅하여 버그 수정!
-        let player = { x: 380, y: 190, radius: 14, targetX: 380, speed: 12 };
+        // 💡 이동 속도를 26으로 상향하여 입력이 씹히는 답답함을 해결했습니다.
+        let player = { x: 380, y: 190, radius: 14, targetX: 380, speed: 26 };
         let cameraX = player.x - 120;
         let score = 0;
+        let isGameOver = false; 
 
         // [시간 관리 시스템 변수]
-        let baseTimeLimit = 500; // 기본 제한시간 0.5초 (500밀리초)
+        let baseTimeLimit = 500; 
         let currentTimeLimit = 500; 
         let timeElapsed = 0;    
-        let lastTime = performance.now();
+        let lastTime = Date.now(); 
 
         // [무한 맵 발판 데이터 생성]
         let blocks = [];
@@ -134,14 +135,15 @@
 
         // [키보드 입력 연동]
         window.addEventListener('keydown', (e) => {
+            if (isGameOver) return;
             if (e.key === '1') handleInput('Na');
             if (e.key === '2') handleInput('K');
         });
 
         // [핵심 판정 로직]
         function handleInput(pressedType) {
-            // 캐릭터가 전진 이동 중일 때는 중복 입력 방지
-            if (player.x !== player.targetX) return;
+            if (isGameOver) return;
+            if (player.x !== player.targetX) return; // 전진 중 입력 차단
 
             let targetBlock = blocks[currentBlockIndex];
 
@@ -150,18 +152,15 @@
                 score++;
                 document.getElementById('scoreDisplay').innerText = score;
                 
-                // 💡 [규칙 반영] 10의 배수로 점수가 커질수록 제한시간 0.1초(100ms)씩 감소 (최소 0.1초 유지)
                 let level = Math.floor(score / 10);
                 currentTimeLimit = Math.max(100, baseTimeLimit - (level * 100));
                 document.getElementById('timerLabel').innerText = `제한시간 (${(currentTimeLimit/1000).toFixed(2)}초)`;
 
-                // 다음 발판 위치로 타겟 설정 및 인덱스 증가
                 currentBlockIndex++;
                 let nextTargetBlock = blocks[currentBlockIndex];
                 player.targetX = nextTargetBlock.x + 30; 
                 
-                // 정답을 맞추면 타이머를 즉시 0으로 초기화
-                timeElapsed = 0;
+                timeElapsed = 0; // 타이머 초기화
 
                 generateBlock();
             } 
@@ -172,8 +171,15 @@
         }
 
         function triggerGameOver(message) {
-            alert("게임 오버! \n이유: " + message + "\n최종 점수: " + score + "점");
-            resetGame();
+            if (isGameOver) return;
+            isGameOver = true; // 호출 즉시 플래그를 세워 중복 진입 방지
+            
+            document.getElementById('gaugeBar').style.width = '0%';
+            
+            setTimeout(() => {
+                alert("게임 오버! \n이유: " + message + "\n최종 점수: " + score + "점");
+                resetGame();
+            }, 10);
         }
 
         function resetGame() {
@@ -184,4 +190,113 @@
             blocks = [];
             nextBlockX = 350;
             currentBlockIndex = 0;
-            for(let i =
+            for(let i = 0; i < 10; i++) { generateBlock(); }
+
+            player = { x: 380, y: 190, radius: 14, targetX: 380, speed: 26 };
+            cameraX = player.x - 120;
+
+            document.getElementById('scoreDisplay').innerText = score;
+            document.getElementById('timerLabel').innerText = `제한시간 (${(baseTimeLimit/1000).toFixed(2)}초)`;
+            document.getElementById('gaugeBar').style.width = '100%';
+            
+            isGameOver = false; // 모든 데이터 세팅이 끝난 후 플래그 해제
+            lastTime = Date.now();
+            animate(); // 안전하게 단 하나의 루프만 재시작
+        }
+
+        // [메인 게임 루프]
+        function animate() {
+            // 💡 애니메이션 루프가 중첩 누적되는 현상을 원천 차단합니다.
+            if (isGameOver) return; 
+
+            let now = Date.now();
+            let dt = now - lastTime;
+            lastTime = now;
+
+            // 캐릭터 이동
+            if (player.x < player.targetX) {
+                player.x += player.speed;
+                if (player.x > player.targetX) player.x = player.targetX;
+            }
+
+            cameraX = player.x - 120;
+
+            // 시간 계산 및 게이지 연동
+            let isWaitingInput = (player.x === player.targetX);
+
+            if (isWaitingInput) {
+                timeElapsed += dt;
+                
+                let gaugePercent = Math.max(0, 100 - (timeElapsed / currentTimeLimit) * 100);
+                document.getElementById('gaugeBar').style.width = gaugePercent + '%';
+
+                // 타임아웃 조건 검사
+                if (timeElapsed >= currentTimeLimit) {
+                    triggerGameOver("시간 안에 이온 통로를 개방하지 못했습니다!");
+                    return; // 즉시 루프 탈출
+                }
+            } else {
+                document.getElementById('gaugeBar').style.width = '100%';
+            }
+
+            // 그래픽 렌더링
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.translate(-cameraX, 0);
+
+            // 1. 뉴런 세포막 선
+            ctx.strokeStyle = '#2d325a';
+            ctx.lineWidth = 6;
+            ctx.beginPath();
+            ctx.moveTo(0, 200);
+            ctx.lineTo(player.x + 1000, 200);
+            ctx.stroke();
+
+            // 2. 말이집 및 결절/발판
+            blocks.forEach((b, idx) => {
+                if (b.isMyelin && idx !== currentBlockIndex) {
+                    ctx.fillStyle = '#3a3f58';
+                    ctx.fillRect(b.x - 120, 185, 100, 30);
+                }
+
+                ctx.fillStyle = b.color;
+                if (idx === currentBlockIndex) {
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = b.color;
+                } else {
+                    ctx.shadowBlur = 0;
+                }
+                
+                ctx.fillRect(b.x, 190, 60, 20);
+                ctx.shadowBlur = 0;
+
+                ctx.fillStyle = '#000000';
+                ctx.font = 'bold 12px sans-serif';
+                ctx.fillText(b.type === 'Na' ? 'Na+ (1)' : 'K+ (2)', b.x + 8, 205);
+
+                if (idx === currentBlockIndex) {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = 'bold 18px sans-serif';
+                    ctx.fillText('▼', b.x + 20, 175);
+                }
+            });
+
+            // 3. 캐릭터
+            ctx.fillStyle = '#00e5ff';
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#00e5ff';
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            ctx.restore();
+            requestAnimationFrame(animate);
+        }
+
+        // 게임 최초 실행 명령
+        lastTime = Date.now();
+        animate();
+    </script>
+</body>
+</html>
