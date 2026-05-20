@@ -2,9 +2,8 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>뉴런의 신경전달 대탐험 - 러너 게임</title>
+    <title>뉴런 러너 - 코어 단계</title>
     <style>
-        /* UI/UX 레이아웃 스타일 설정 */
         body {
             margin: 0;
             background-color: #1a1a1a;
@@ -26,33 +25,19 @@
             border-radius: 10px;
             overflow: hidden;
         }
-        /* 타이머 바 스타일 (UX 피드백) */
-        #timer-container {
-            width: 800px;
-            height: 20px;
-            background-color: #444;
-            margin-bottom: 10px;
-            border-radius: 5px;
-            overflow: hidden;
-        }
-        #timer-bar {
-            width: 100%;
-            height: 100%;
-            background-color: #ff4757;
-            transition: width 0.05s linear;
-        }
-        /* 게임 내 오브젝트들 */
+        /* 주인공 캐릭터 */
         #character {
             position: absolute;
             width: 40px;
             height: 40px;
-            background-color: #ff9f43; /* 주황색 주인공 자극 캐릭터 */
+            background-color: #ff9f43;
             border-radius: 50%;
             bottom: 60px;
             left: 100px;
-            transition: left 0.2s ease, bottom 0.2s ease;
+            transition: left 0.2s ease, bottom 0.1s ease;
             z-index: 10;
         }
+        /* 발판들이 배치될 가로 줄 전체 박스 */
         #platforms-wrapper {
             position: absolute;
             bottom: 0;
@@ -72,205 +57,120 @@
             font-size: 14px;
             color: #2b2b2b;
         }
-        /* 이온 색상 지정 (UI 디자인 원칙) */
-        .sodium { background-color: #f1c40f; } /* 노랑: 나트륨 */
+        /* 요구사항 반영 이온 색상 */
+        .sodium { background-color: #f1c40f; }    /* 노랑: 나트륨 */
         .potassium { background-color: #2ecc71; } /* 초록: 칼륨 */
         
-        /* 안내 문구 및 점수 */
         #ui-layer {
-            margin-top: 15px;
+            margin-top: 20px;
             text-align: center;
         }
         .key-guide {
             display: inline-block;
-            padding: 5px 10px;
+            padding: 8px 15px;
             margin: 5px;
-            border-radius: 3px;
-            font-weight: bold;
-        }
-        /* 게임오버 화면 팝업 */
-        #game-over-screen {
-            display: none;
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background-color: rgba(0,0,0,0.85);
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 20;
-        }
-        button {
-            padding: 10px 20px;
-            font-size: 18px;
-            background-color: #ff9f43;
-            border: none;
             border-radius: 5px;
-            cursor: pointer;
             font-weight: bold;
+            font-size: 16px;
         }
-        button:hover { background-color: #ffb142; }
     </style>
 </head>
 <body>
 
-    <h2>점수: <span id="score">0</span></h2>
-    
-    <!-- 타이머 바 UI -->
-    <div id="timer-container">
-        <div id="timer-bar"></div>
-    </div>
+    <h1>점수: <span id="score">0</span></h1>
 
-    <!-- 게임 화면 박스 -->
     <div id="game-container">
         <div id="character"></div>
         <div id="platforms-wrapper"></div>
-
-        <!-- 게임오버 팝업 -->
-        <div id="game-over-screen">
-            <h1 style="color: #ff4757; font-size: 40px; margin-bottom: 10px;">게임 오버 (사망)</h1>
-            <p id="death-reason" style="margin-bottom: 20px; color: #ccc;"></p>
-            <button onclick="resetGame()">다시 도전하기</button>
-        </div>
     </div>
 
-    <!-- 조작 가이드 UI -->
+    <!-- 새롭게 매칭된 조작 가이드 UI -->
     <div id="ui-layer">
-        <h3>조작키 가이드</h3>
-        <span class="key-guide sodium">노란색 발판 = [N] 키 (나트륨)</span>
-        <span class="key-guide potassium">초록색 발판 = [K] 키 (칼륨)</span>
+        <h3>[현재 단계] 올바른 이온 키를 눌러 전진하세요!</h3>
+        <span class="key-guide potassium" style="color: white;">초록색 발판 떴을 때 ➔ [1] 키</span>
+        <span class="key-guide sodium">노란색 발판 떴을 때 ➔ [2] 키</span>
     </div>
 
     <script>
-        // 게임 시스템 내부 상태 데이터
         const charElem = document.getElementById('character');
         const wrapperElem = document.getElementById('platforms-wrapper');
-        const timerBar = document.getElementById('timer-bar');
         const scoreElem = document.getElementById('score');
-        const gameOverScreen = document.getElementById('game-over-screen');
-        const deathReasonElem = document.getElementById('death-reason');
 
         let score = 0;
-        let currentIndex = 0; // 현재 밟고 있는 발판 번호
-        let platforms = [];   // 발판 색상 배열 순서
-        let timerInterval = null;
-        let timeLeft = 100;   // 남은 시간 백분율 (%)
-        const LIMIT_TIME = 1.5; // 제한 시간 1.5초
-        let isGameOver = false;
+        let currentIndex = 0; // 캐릭터가 디딛고 있는 현재 발판 위치
+        let platforms = [];   // 무작위로 생성될 발판들의 색상 저장소
 
-        // 1. 발판 무작위 패턴 생성 기능
-        function generatePlatforms() {
+        // 1단계: 100개의 발판 무작위 패턴 생성 및 배치
+        function initGame() {
+            score = 0;
+            currentIndex = 0;
+            scoreElem.innerText = score;
             wrapperElem.innerHTML = '';
             platforms = [];
-            // 첫 발판은 항상 노란색 고정
+
+            // 캐릭터 시작 지점 (첫 발판은 무조건 노란색 고정)
             platforms.push('sodium');
-            
-            // 이후 100개의 발판을 무작위 생성 (활동전위 알고리즘 적용)
-            for(let i=1; i<100; i++) {
+
+            // 1번부터 99번 발판까지 노랑(sodium) 또는 초록(potassium) 무작위 결정
+            for(let i = 1; i < 100; i++) {
                 const type = Math.random() > 0.5 ? 'sodium' : 'potassium';
                 platforms.push(type);
             }
 
-            // HTML 화면상에 발판 그리기 (UI 배치)
+            // 루프를 돌며 HTML 화면에 발판 실물 그리기
             platforms.forEach((type, index) => {
                 const plat = document.createElement('div');
                 plat.className = `platform ${type}`;
-                plat.innerText = type === 'sodium' ? '나트륨(Na+)' : '칼륨(K+)';
+                plat.innerText = type === 'sodium' ? '나트륨(2)' : '칼륨(1)';
                 plat.style.position = 'absolute';
-                plat.style.left = `${index * 150}px`; // 발판 간격 설정
+                // 발판 너비(120px) + 간격(30px) = 150px씩 우측으로 배치
+                plat.style.left = `${index * 150}px`; 
                 wrapperElem.appendChild(plat);
             });
+
+            // 초기 위치 세팅
+            wrapperElem.style.left = '0px';
         }
 
-        // 2. 타이머 시스템 구동
-        function startTimer() {
-            clearInterval(timerInterval);
-            timeLeft = 100;
-            timerBar.style.width = '100%';
-            
-            const step = 50; // 0.05초마다 갱신
-            const totalSteps = (LIMIT_TIME * 1000) / step;
-            let currentStep = 0;
-
-            timerInterval = setInterval(() => {
-                if (isGameOver) return;
-                
-                currentStep++;
-                timeLeft = 100 - (currentStep / totalSteps * 100);
-                timerBar.style.width = `${timeLeft}%`;
-
-                // [선택 B 조건] 시간 초과 시 캐릭터 사망 및 팝업 활성화 트리거
-                if (timeLeft <= 0) {
-                    triggerGameOver("제한 시간이 초과되어 뉴런의 전도 신호가 소멸했습니다!");
-                }
-            }, step);
-        }
-
-        // 3. 2가지 키 조건문 판정 시스템 & 캐릭터 자동 전진
+        // 2단계: 키보드 입력 및 조건문 판정 시스템
         window.addEventListener('keydown', (e) => {
-            if (isGameOver) return;
-
+            // 다음에 밟아야 할 발판의 인덱스와 타깃 색상 확인
             const nextIndex = currentIndex + 1;
-            const nextPlatformType = platforms[nextIndex]; // 다음 발판의 색상 확인
-            const key = e.key.toLowerCase();
+            
+            // 100개 발판을 다 깨면 안전하게 종료
+            if (nextIndex >= platforms.length) return; 
+            
+            const nextPlatformType = platforms[nextIndex];
+            const pressedKey = e.key; // 유저가 누른 키 값 받기
 
             let isCorrect = false;
 
-            // 조건문 분기 감지 판정
-            if (nextPlatformType === 'sodium' && key === 'n') {
-                isCorrect = true; // 조건 1 통과
-            } else if (nextPlatformType === 'potassium' && key === 'k') {
-                isCorrect = true; // 조건 2 통과
+            // 핵심 조건문 분기 설계
+            if (nextPlatformType === 'potassium' && pressedKey === '1') {
+                isCorrect = true; // 초록 발판일 때 1번 통과
+            } else if (nextPlatformType === 'sodium' && pressedKey === '2') {
+                isCorrect = true; // 노란 발판일 때 2번 통과
             }
 
+            // 조건 통과 시 캐릭터 자동 점프 및 카메라 이동 연동
             if (isCorrect) {
-                // [선택 A] 정답 입력 성공 시 흐름
                 currentIndex = nextIndex;
                 score++;
                 scoreElem.innerText = score;
-                
-                // 캐릭터 점프 애니메이션 구현 (좌표 이동)
-                charElem.style.bottom = '100px'; 
-                setTimeout(() => { charElem.style.bottom = '60px'; }, 100);
 
-                // 카메라 추적 효과 (발판 전체 랩퍼를 왼쪽으로 밀어줌으로써 카메라가 따라가는 UX 체감 형성)
+                // 통통 튀는 점프 애니메이션 (Y축 좌표 제어)
+                charElem.style.bottom = '110px';
+                setTimeout(() => {
+                    charElem.style.bottom = '60px';
+                }, 100);
+
+                // 카메라 추적: 발판 묶음을 한 칸 분량(-150px)만큼 왼쪽으로 당김
                 wrapperElem.style.left = `${-currentIndex * 150}px`;
-                
-                // 다음 칸을 위한 타이머 일시정지 및 리셋 재작동
-                startTimer();
-            } else {
-                // [선택 B 조건] 키를 잘못 눌렀을 때 즉시 사망 처리
-                if (key === 'n' || key === 'k') {
-                    triggerGameOver("잘못된 이온 통로 키를 눌러 활동전위 형성에 실패했습니다!");
-                }
             }
         });
 
-        // 4. 캐릭터 사망 및 게임오버 시스템
-        function triggerGameOver(reason) {
-            isGameOver = true;
-            clearInterval(timerInterval);
-            deathReasonElem.innerText = reason;
-            gameOverScreen.style.display = 'flex';
-            charElem.style.backgroundColor = '#4c4c4c'; // 캐릭터가 잿빛으로 변하는 연출 (사망 UX)
-        }
-
-        // 5. 라운드 재시작 기능
-        function resetGame() {
-            score = 0;
-            currentIndex = 0;
-            isGameOver = false;
-            scoreElem.innerText = score;
-            charElem.style.backgroundColor = '#ff9f43';
-            wrapperElem.style.left = '0px';
-            gameOverScreen.style.display = 'none';
-            
-            generatePlatforms();
-            startTimer();
-        }
-
-        // 게임 최초 기동 실행
-        generatePlatforms();
-        startTimer();
+        // 웹페이지가 로드되면 즉시 실행
+        initGame();
     </script>
 </body>
 </html>
